@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "marktplaats-suite"
+version = "1.0.0"
+description = "Productmanager, fotomanager, barcode scanner en automater voor Marktplaats"
+requires-python = ">=3.9"
+dependencies = ["pillow", "python-barcode", "openpyxl", "python-docx", "Send2Trash",
+                "brother_ql", "selenium", "requests"]
+
+[project.optional-dependencies]
+ai = ["transparent-background", "rembg", "opencv-python", "numpy", "tqdm", "psutil"]
+
+[project.scripts]
+marktplaats-suite = "marktplaats_suite.launcher:main"
+
+[tool.setuptools]
+packages = ["marktplaats_suite"]
+
+[tool.setuptools.package-data]
+marktplaats_suite = ["assets/*"]
