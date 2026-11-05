@@ -70,26 +70,21 @@ exec "$VENV/bin/python" -m marktplaats_suite "\$@"
 LAUNCH
 chmod +x "$HOME/.local/bin/marktplaats-suite"
 
-maak_desktop() { # id naam commentaar argument
-  cat > "$HOME/.local/share/applications/marktplaats-$1.desktop" <<DESK
+cat > "$HOME/.local/share/applications/marktplaats-suite.desktop" <<DESK
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=$2
-Comment=$3
-Exec=$HOME/.local/bin/marktplaats-suite $4
+Name=Marktplaats Suite
+Comment=Producten, foto's, scanner en automater in één venster
+Exec=$HOME/.local/bin/marktplaats-suite
 Icon=$PREFIX/icon.png
 Terminal=false
 StartupNotify=true
-StartupWMClass=marktplaats_$1
+StartupWMClass=marktplaats_suite
 Categories=Utility;Office;
 DESK
-}
-maak_desktop suite "Marktplaats Suite" "Alle Marktplaats-tools in één" ""
-maak_desktop productmanager "Marktplaats Productmanager" "Producten registreren en beheren" productmanager
-maak_desktop fotomanager "Marktplaats Fotomanager" "Foto's verwerken" fotomanager
-maak_desktop barcode_scanner "Marktplaats Barcode Scanner" "Barcode scannen" scanner
-maak_desktop automater_gtk "Marktplaats Automater" "Advertenties automatisch plaatsen" automater
+# oude losse starters uit eerdere versies opruimen
+rm -f "$HOME"/.local/share/applications/marktplaats-{productmanager,fotomanager,barcode_scanner,automater_gtk}.desktop
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
 
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "Tip: voeg ~/.local/bin toe aan je PATH (log opnieuw in).";; esac

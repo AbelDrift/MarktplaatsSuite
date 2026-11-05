@@ -8,7 +8,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, GdkPixbuf
 import os
-from marktplaats_suite.common import data_dir, asset
+from marktplaats_suite.common import data_dir, asset, shared_get, shared_set, is_shared_key
 import sys
 import json
 import hashlib
@@ -634,9 +634,14 @@ class ConfigManager:
             json.dump(self.data, f, indent=2, ensure_ascii=False)
 
     def get(self, key, default=None):
+        if is_shared_key(key):
+            return shared_get(key, default)
         return self.data.get(key, default)
 
     def set(self, key, value):
+        if is_shared_key(key):
+            shared_set(key, value)
+            return
         self.data[key] = value
         self.save()
 
@@ -807,19 +812,10 @@ def build_txt_beschrijving(product, config=None):
         parts.append("\n".join(specs))
 
     # Algemene voorwaarden
-    voorwaarden = product.get("algemene_voorwaarden")
-    if not voorwaarden and config:
-        av_pad = config.get("algemene_voorwaarden_pad", "")
-        if av_pad and os.path.exists(av_pad):
-            try:
-                voorwaarden = lees_algemene_voorwaarden_bestand(av_pad)
-            except Exception:
-                pass
-
-    if not voorwaarden:
-        voorwaarden = ALGEMENE_VOORWAARDEN
-
-    parts.append(voorwaarden)
+    from marktplaats_suite.voorwaarden import voorwaarden_voor_advertentie
+    voorwaarden = product.get("algemene_voorwaarden") or voorwaarden_voor_advertentie()
+    if voorwaarden:
+        parts.append(voorwaarden)
 
     return "\n\n".join(parts)
 
@@ -1473,7 +1469,7 @@ class SettingsDialog(Gtk.Dialog):
             # --- Opslag ---
             main_box.pack_start(self._section_label("💾 Opslag (XML bestand)"), False, False, 0)
 
-            main_box.pack_start(Gtk.Label(label="XML-bestandspad:"), False, False, 0)
+            main_box.pack_start(Gtk.Label(label="XML-bestandspad (geldt voor ALLE onderdelen: producten, scanner, automater):"), False, False, 0)
             self.xml_path_entry = Gtk.Entry()
             self.xml_path_entry.set_text(self.config.get("xml_path", ""))
             main_box.pack_start(self.xml_path_entry, False, False, 0)
@@ -1482,28 +1478,9 @@ class SettingsDialog(Gtk.Dialog):
 
             # --- Algemene voorwaarden ---
             main_box.pack_start(self._section_label("📄 Algemene voorwaarden"), False, False, 0)
-            av_hint = Gtk.Label()
-            av_hint.set_markup(
-                "<small><i>Selecteer een .docx (Word) bestand om vet/schuin uit uw eigen tekst over te "
-                "nemen (wordt omgezet naar leesbare platte-tekst-opmaak, want Marktplaats ondersteunt "
-                "geen echte opmaak), of een .txt bestand — daarin kunt u zelf **vet** en *schuin* typen.</i></small>"
-            )
-            av_hint.set_xalign(0)
-            av_hint.set_line_wrap(True)
-            main_box.pack_start(av_hint, False, False, 0)
-
-            av_row = Gtk.Box(spacing=5)
-            self.av_entry = Gtk.Entry()
-            av_pad = self.config.get("algemene_voorwaarden_pad", "")
-            self.av_entry.set_text(av_pad)
-            self.av_entry.set_placeholder_text("Pad naar algemene_voorwaarden.txt")
-            av_row.pack_start(self.av_entry, True, True, 0)
-
-            av_browse_btn = Gtk.Button(label="📂 Bladeren")
-            av_browse_btn.connect("clicked", self._browse_av_bestand)
-            av_row.pack_start(av_browse_btn, False, False, 0)
-
-            main_box.pack_start(av_row, False, False, 0)
+            from marktplaats_suite.voorwaarden import VoorwaardenEditor
+            self.av_editor = VoorwaardenEditor()
+            main_box.pack_start(self.av_editor, False, False, 0)
 
             main_box.pack_start(Gtk.Separator(), False, False, 5)
 
@@ -1686,48 +1663,6 @@ class SettingsDialog(Gtk.Dialog):
             dialog.destroy()
             raise
 
-    def _browse_av_bestand(self, widget):
-        dialog = Gtk.FileChooserDialog(
-            title="Kies algemene voorwaarden bestand",
-            transient_for=self,
-            action=Gtk.FileChooserAction.OPEN
-        )
-        dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK)
-
-        filter_docx = Gtk.FileFilter()
-        filter_docx.set_name("Word-documenten (*.docx) - met opmaak")
-        filter_docx.add_pattern("*.docx")
-        dialog.add_filter(filter_docx)
-
-        filter_txt = Gtk.FileFilter()
-        filter_txt.set_name("Tekstbestanden (*.txt)")
-        filter_txt.add_pattern("*.txt")
-        dialog.add_filter(filter_txt)
-
-        filter_all = Gtk.FileFilter()
-        filter_all.set_name("Alle bestanden")
-        filter_all.add_pattern("*")
-        dialog.add_filter(filter_all)
-
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            bestandspad = dialog.get_filename()
-            self.av_entry.set_text(bestandspad)
-
-            # Meteen testen of het bestand leesbaar is (bijv. python-docx aanwezig, geldig .docx)
-            try:
-                lees_algemene_voorwaarden_bestand(bestandspad)
-            except Exception as e:
-                foutdialog = Gtk.MessageDialog(
-                    transient_for=self, flags=0,
-                    message_type=Gtk.MessageType.WARNING,
-                    buttons=Gtk.ButtonsType.OK,
-                    text="⚠️ Bestand geselecteerd, maar kon niet worden gelezen"
-                )
-                foutdialog.format_secondary_text(str(e))
-                foutdialog.run()
-                foutdialog.destroy()
-        dialog.destroy()
 
     def _on_print_method_changed(self, widget):
         is_brother_ql = self.print_method_combo.get_active_id() == "brother_ql"
@@ -1780,7 +1715,7 @@ class SettingsDialog(Gtk.Dialog):
         self.config.set("opslaglocatie_codes", self._parse_key_value_lines(self.opslaglocatie_view))
         self.config.set("sublocatie_codes", self._parse_key_value_lines(self.sublocatie_view))
         self.config.set("rij_codes", self._parse_key_value_lines(self.rij_view))
-        self.config.set("algemene_voorwaarden_pad", self.av_entry.get_text().strip())
+        self.av_editor.opslaan()
 
         printer_name = self.printer_combo.get_active_text() or ""
         self.config.set("printer", {
@@ -4476,11 +4411,11 @@ class SettingsTab(Gtk.Box):
 # ============================================
 class MainWindow(Gtk.Window):
     def __init__(self, gebruikersnaam, user_manager):
-        super().__init__(title="Marktplaats Product Manager")
-        self.set_default_size(900, 800)
+        super().__init__(title="Marktplaats Suite")
+        self.set_default_size(1100, 850)
         self.set_position(Gtk.WindowPosition.CENTER)
 
-        icon_path = os.path.join(config_dir(), "icon.png")
+        icon_path = asset("icon.png")
         if os.path.exists(icon_path):
             try:
                 self.set_icon_from_file(icon_path)
@@ -4553,6 +4488,19 @@ class MainWindow(Gtk.Window):
         self.dashboard_tab = DashboardTab(self)
         self.notebook.append_page(self.dashboard_tab, Gtk.Label(label="📈 Dashboard"))
 
+        # Overige onderdelen van de Marktplaats Suite als tabs
+        self.foto_tab = self._maak_onderdeel_tab("📷 Foto's", "marktplaats_suite.fotomanager", "MarktplaatsApp")
+        self.scanner_tab = self._maak_onderdeel_tab("🔍 Scanner", "marktplaats_suite.scanner", "MainWindow")
+        self.automater_app = None
+        try:
+            from marktplaats_suite.automater import App as AutomaterApp
+            self.automater_app = AutomaterApp()
+            self.notebook.append_page(self.automater_app.window, Gtk.Label(label="🤖 Automater"))
+        except (Exception, SystemExit) as e:
+            self._voeg_foutmelding_tab_toe("🤖 Automater", e)
+        self.connect("delete-event", self._on_delete_event)
+        self.connect("destroy", lambda *_: self.automater_app and self.automater_app.sluit())
+
         self.statusbar = Gtk.Statusbar()
         self.statusbar.set_hexpand(True)
         vbox.pack_start(self.statusbar, False, False, 0)
@@ -4582,15 +4530,42 @@ class MainWindow(Gtk.Window):
         self.add_accel_group(accel_group)
 
     def _bind_sneltoets(self, accel_group, actie, callback):
-        toets = self.user_settings.get_sneltoets(actie)
-        if not toets:
+        toetsen = self.user_settings.get_sneltoets(actie)
+        if not toetsen:
             return
+        if isinstance(toetsen, str):
+            toetsen = [toetsen]
+        for toets in toetsen:
+            try:
+                key, mods = Gtk.accelerator_parse(toets)
+                if key != 0:
+                    accel_group.connect(key, mods, Gtk.AccelFlags.VISIBLE, callback)
+            except Exception as e:
+                print(f"Fout bij binden van sneltoets {actie} ({toets}): {e}")
+
+    def _maak_onderdeel_tab(self, titel, module, klasse):
+        """Laadt een onderdeel als tab; een ontbrekende afhankelijkheid breekt de rest niet."""
+        import importlib
         try:
-            key, mods = Gtk.accelerator_parse(toets)
-            if key != 0:
-                accel_group.connect(key, mods, Gtk.AccelFlags.VISIBLE, callback)
-        except Exception as e:
-            print(f"Fout bij binden van sneltoets {actie} ({toets}): {e}")
+            tab = getattr(importlib.import_module(module), klasse)()
+            self.notebook.append_page(tab, Gtk.Label(label=titel))
+            return tab
+        except (Exception, SystemExit) as e:
+            self._voeg_foutmelding_tab_toe(titel, e)
+            return None
+
+    def _voeg_foutmelding_tab_toe(self, titel, fout):
+        lbl = Gtk.Label()
+        lbl.set_markup(f"<b>{GLib.markup_escape_text(titel)} kon niet worden geladen</b>\n\n"
+                       f"{GLib.markup_escape_text(str(fout) or type(fout).__name__)}\n\n"
+                       "Draai ./install.sh opnieuw om ontbrekende pakketten te installeren.")
+        lbl.set_line_wrap(True); lbl.set_selectable(True)
+        self.notebook.append_page(lbl, Gtk.Label(label=titel))
+
+    def _on_delete_event(self, *_):
+        if self.automater_app and not self.automater_app.kan_sluiten():
+            return True
+        return False
 
     def _focus_zoekveld(self):
         self.notebook.set_current_page(1)
@@ -4613,6 +4588,8 @@ class MainWindow(Gtk.Window):
                 self.overzicht_tab._update_tree_columns()
                 self.overzicht_tab.herlaad()
                 self.dashboard_tab.herlaad()
+                if getattr(self, "scanner_tab", None):
+                    self.scanner_tab._update_backend_label()
             dialog.destroy()
         except Exception as e:
             import traceback
@@ -5152,7 +5129,7 @@ class KolomKiezerDialog(Gtk.Dialog):
 
 
 def main():
-    GLib.set_prgname("marktplaats_productmanager")
+    GLib.set_prgname("marktplaats_suite")
     apply_css()
 
     user_manager = UserManager()

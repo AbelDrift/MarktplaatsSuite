@@ -2,14 +2,21 @@
 
 Eén app met alle Marktplaats-tools van HerNieuw, voor **Debian en Ubuntu** (en afgeleiden):
 
-| Module | Was | Doel |
-|---|---|---|
-| `productmanager` | MarktplaatsProductmanager | Producten registreren, labels/barcodes, verkocht/retour/gereserveerd, dashboard |
-| `fotomanager` | MarktplaatsFotoManager | Foto's verwerken (achtergrond, watermerk, logo, mappenstructuur) |
-| `scanner` | MarktplaatsScanner | USB-barcodescanner met productinfo en foto |
-| `automater` | MarktplaatsAutomater | Advertenties automatisch plaatsen (Selenium + Chrome/Chromium) |
+Alles in **één venster** met tabs:
 
-Start `marktplaats-suite` voor het startscherm, of direct een module: `marktplaats-suite scanner`.
+| Tab | Was | Doel |
+|---|---|---|
+| 📝 Registreren / 📊 Overzicht / 📈 Dashboard | MarktplaatsProductmanager | Producten registreren, labels/barcodes, verkocht/retour/gereserveerd, statistieken |
+| 📷 Foto's | MarktplaatsFotoManager | Foto's verwerken (achtergrond, watermerk, logo, mappenstructuur) |
+| 🔍 Scanner | MarktplaatsScanner | USB-barcodescanner met productinfo en foto |
+| 🤖 Automater | MarktplaatsAutomater | Advertenties automatisch plaatsen (Selenium + Chrome/Chromium) |
+
+Start met `marktplaats-suite` of via het applicatiemenu.
+
+**Centrale instellingen** (⚙️ rechtsboven): het XML-bestand wordt maar op één plek ingesteld en geldt voor alle tabs.
+Algemene voorwaarden bewerk je in een eigen tekstvak met vet/schuin (knoppen of Ctrl+B / Ctrl+I), met import
+uit .docx/.txt, een voorbeeld zoals het op Marktplaats verschijnt, en een vinkje om voorwaarden wel of niet
+onder advertenties te plaatsen.
 
 ## Installeren
 
@@ -28,7 +35,7 @@ Verwijderen: `./uninstall.sh` (`--alles` wist ook je gegevens).
 
 ## Gegevens
 
-Alles (producten.xml, instellingen, input/output van de fotomanager, thumbnail-cache) staat in
+Alles (producten.xml, `suite_config.json` met XML-pad en voorwaarden, instellingen, input/output van de fotomanager, thumbnail-cache) staat in
 `~/.local/share/marktplaats-suite/`, of in `$MARKTPLAATS_DATA_DIR`. Bestaande bestanden uit de
 losse apps (`producten.xml`, `productmanager_config.json`, `scanner_config.json`) kopieer je
 naar die map; de fotomanager-instellingen heten nu `fotomanager_config.json`

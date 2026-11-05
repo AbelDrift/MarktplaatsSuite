@@ -5,7 +5,7 @@ Alle instellingen binnen de GUI
 """
 
 import os
-from marktplaats_suite.common import data_dir, asset
+from marktplaats_suite.common import data_dir, asset, get_xml_path, TabBasis, run_standalone
 import sys
 import time
 import threading
@@ -33,7 +33,7 @@ try:
 except ImportError as e:
     print(f"❌ Fout: {e}")
     print("📌 Installeer selenium met: pip install selenium")
-    sys.exit(1)
+    raise
 
 # ============================================
 # CONFIGURATIE BESTAND
@@ -245,7 +245,10 @@ def build_description(product):
     if specs:
         parts.append("\n".join(specs))
 
-    parts.append(voorwaarden if voorwaarden else ALGEMENE_VOORWAARDEN)
+    from marktplaats_suite.voorwaarden import voorwaarden_voor_advertentie
+    eind = voorwaarden or voorwaarden_voor_advertentie()
+    if eind:
+        parts.append(eind)
     return "\n\n".join(parts)
 
 # ============================================
@@ -317,7 +320,7 @@ class MarktplaatsAuto:
 
     def load_products(self):
         self.logger.info("📄 Laden uit lokaal XML-bestand...")
-        xml_path = self.config.get('storage.xml_path', '')
+        xml_path = get_xml_path()
         if not xml_path:
             self.logger.error("XML-pad niet ingesteld!")
             return False
@@ -539,7 +542,7 @@ class MarktplaatsAuto:
         ook de huidige browser-URL op (in het eerste lege url_1..url_5-
         veld), indien gegeven."""
         import xml.etree.ElementTree as ET
-        xml_path = self.config.get('storage.xml_path', '')
+        xml_path = get_xml_path()
         if not xml_path or not os.path.exists(xml_path):
             raise FileNotFoundError(f"XML-bestand niet gevonden: {xml_path}")
         tree = ET.parse(xml_path)
@@ -599,7 +602,7 @@ class MarktplaatsAuto:
 class App:
     def __init__(self):
         # GTK zet automatisch de juiste WM_CLASS!
-        self.window = Gtk.Window()
+        self.window = TabBasis(title="Automater")
         self.window.set_title("Marktplaats Automatisering")
         self.window.set_default_size(1000, 750)
         self.window.set_position(Gtk.WindowPosition.CENTER)
@@ -627,7 +630,6 @@ class App:
         self.logger.info("🚀 Klaar om te starten!")
         self.logger.info("📌 Vul eerst de instellingen in en klik op 'Opslaan'")
 
-        self.window.connect("destroy", self._on_close)
 
     def _setup_ui(self):
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -674,27 +676,14 @@ class App:
         settings_box.pack_start(label, False, False, 0)
 
         backend_hint = Gtk.Label()
-        backend_hint.set_markup("<small><i>⚠️ Moet hetzelfde bestand zijn als in marktplaats_productmanager.py</i></small>")
+        backend_hint.set_markup("<small><i>Het XML-bestand stel je centraal in via ⚙️ Instellingen in het hoofdvenster.</i></small>")
         backend_hint.set_halign(Gtk.Align.START)
         settings_box.pack_start(backend_hint, False, False, 0)
 
-        self.xml_grid = Gtk.Grid()
-        self.xml_grid.set_column_spacing(10)
-        self.xml_grid.set_row_spacing(5)
-        self.xml_grid.set_margin_bottom(10)
-        settings_box.pack_start(self.xml_grid, False, False, 0)
-
-        label = Gtk.Label(label="XML-bestandspad:")
-        label.set_halign(Gtk.Align.END)
-        self.xml_grid.attach(label, 0, 0, 1, 1)
-        xml_path_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
-        self.xml_path_entry = Gtk.Entry()
+        self.xml_path_entry = Gtk.Entry()  # alleen-lezen weergave van het centrale pad
+        self.xml_path_entry.set_editable(False)
         self.xml_path_entry.set_hexpand(True)
-        xml_path_box.pack_start(self.xml_path_entry, True, True, 0)
-        browse_xml_btn = Gtk.Button(label="Bladeren")
-        browse_xml_btn.connect("clicked", self._browse_xml)
-        xml_path_box.pack_start(browse_xml_btn, False, False, 0)
-        self.xml_grid.attach(xml_path_box, 1, 0, 1, 1)
+        settings_box.pack_start(self.xml_path_entry, False, False, 0)
 
         # Paden sectie
         label = Gtk.Label()
@@ -821,31 +810,10 @@ class App:
         self.logger = Logger(self.log_text_view)
         self.auto.logger = self.logger
 
-    def _browse_xml(self, widget):
-        dialog = Gtk.FileChooserDialog(
-            title="Selecteer of maak producten.xml",
-            parent=self.window,
-            action=Gtk.FileChooserAction.SAVE
-        )
-        dialog.set_do_overwrite_confirmation(False)
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OPEN, Gtk.ResponseType.OK
-        )
-        filter_xml = Gtk.FileFilter()
-        filter_xml.set_name("XML files")
-        filter_xml.add_pattern("*.xml")
-        dialog.add_filter(filter_xml)
-
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            self.xml_path_entry.set_text(dialog.get_filename())
-        dialog.destroy()
-
     def _browse_path(self, widget):
         dialog = Gtk.FileChooserDialog(
             title="Selecteer afbeeldingen map",
-            parent=self.window,
+            parent=self.window.top(),
             action=Gtk.FileChooserAction.SELECT_FOLDER
         )
         dialog.add_buttons(
@@ -860,7 +828,7 @@ class App:
 
     def _load_config_to_gui(self):
         storage = self.config.get('storage', {})
-        self.xml_path_entry.set_text(storage.get('xml_path', ''))
+        self.xml_path_entry.set_text(get_xml_path())
 
         chrome = self.config.get('chrome', {})
         self.profile_path_entry.set_text(chrome.get('user_data_dir', os.path.expanduser("~/.config/google-chrome")))
@@ -874,7 +842,6 @@ class App:
         self.wait_products_entry.set_text(str(prefs.get('wait_between_products', 3)))
 
     def _save_config(self, widget):
-        self.config.set('storage.xml_path', self.xml_path_entry.get_text().strip())
         self.config.set('chrome.user_data_dir', self.profile_path_entry.get_text().strip())
         self.config.set('chrome.profile', self.profile_name_entry.get_text().strip())
         self.config.set('paths.base_image_path', self.image_path_entry.get_text().strip())
@@ -884,7 +851,7 @@ class App:
         self.logger.success("✅ Configuratie opgeslagen!")
 
         dialog = Gtk.MessageDialog(
-            parent=self.window,
+            parent=self.window.top(),
             flags=0,
             message_type=Gtk.MessageType.INFO,
             buttons=Gtk.ButtonsType.OK,
@@ -998,10 +965,11 @@ class App:
         buffer.set_text("")
         self.logger.info("🗑️ Log gewist")
 
-    def _on_close(self, widget):
+    def kan_sluiten(self):
+        """True als afsluiten mag; vraagt bevestiging als de automatisering draait."""
         if self.running:
             dialog = Gtk.MessageDialog(
-                parent=self.window,
+                parent=self.window.top(),
                 flags=Gtk.DialogFlags.MODAL,
                 message_type=Gtk.MessageType.QUESTION,
                 buttons=Gtk.ButtonsType.YES_NO,
@@ -1010,22 +978,22 @@ class App:
             response = dialog.run()
             dialog.destroy()
             if response == Gtk.ResponseType.NO:
-                return
-        self.auto.close()
-        Gtk.main_quit()
+                return False
+        return True
 
-    def run(self):
-        self.window.show_all()
-        Gtk.main()
+    def sluit(self):
+        try:
+            self.auto.close()
+        except Exception:
+            pass
+
 
 # ============================================
 # MAIN
 # ============================================
 
 def main():
-    GLib.set_prgname("marktplaats_automater_gtk")
-    app = App()
-    app.run()
+    run_standalone(lambda: App().window, "Marktplaats Automatisering", 1000, 750)
 
 
 if __name__ == "__main__":

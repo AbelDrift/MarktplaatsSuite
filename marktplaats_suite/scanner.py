@@ -16,7 +16,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, GdkPixbuf, Pango
 import os
-from marktplaats_suite.common import data_dir, asset
+from marktplaats_suite.common import data_dir, asset, get_xml_path, TabBasis, run_standalone
 import sys
 import json
 import subprocess
@@ -146,7 +146,7 @@ def find_product(config, artikelnummer):
     of (None, foutmelding)."""
     artikelnummer = artikelnummer.strip()
     try:
-        xml_path = config.get("storage", {}).get("xml_path", "")
+        xml_path = get_xml_path()
         products = load_all_products_xml(xml_path)
     except Exception as e:
         return None, f"Kon opslag niet lezen: {e}"
@@ -161,7 +161,7 @@ def mark_product_sold(config, artikelnummer, verkoopprijs):
     """Markeert een product als verkocht in de XML."""
     vandaag = datetime.date.today().isoformat()
 
-    xml_path = config.get("storage", {}).get("xml_path", "")
+    xml_path = get_xml_path()
     products = load_all_products_xml(xml_path)
     gevonden = False
     for p in products:
@@ -317,20 +317,14 @@ class SettingsDialog(Gtk.Dialog):
 
         box.pack_start(self._section_label("Opslag"), False, False, 0)
         hint = Gtk.Label()
-        hint.set_markup("<small><i>⚠️ Moet hetzelfde bestand zijn als in de andere Marktplaats-apps.</i></small>")
+        hint.set_markup("<small><i>Het XML-bestand stel je centraal in via ⚙️ Instellingen in het hoofdvenster "
+                        "(geldt voor alle onderdelen).</i></small>")
         hint.set_xalign(0)
         hint.set_line_wrap(True)
         box.pack_start(hint, False, False, 0)
-
-        box.pack_start(Gtk.Label(label="XML-bestandspad:", xalign=0), False, False, 0)
-        xml_row = Gtk.Box(spacing=5)
-        self.xml_path_entry = Gtk.Entry()
-        self.xml_path_entry.set_text(config.get("storage", {}).get("xml_path", ""))
-        xml_row.pack_start(self.xml_path_entry, True, True, 0)
-        browse_xml_btn = Gtk.Button(label="Bladeren")
-        browse_xml_btn.connect("clicked", self._browse_xml)
-        xml_row.pack_start(browse_xml_btn, False, False, 0)
-        box.pack_start(xml_row, False, False, 0)
+        pad_label = Gtk.Label(label=get_xml_path(), xalign=0)
+        pad_label.set_selectable(True)
+        box.pack_start(pad_label, False, False, 0)
 
         box.pack_start(Gtk.Separator(), False, False, 5)
         box.pack_start(self._section_label("Productfoto"), False, False, 0)
@@ -360,29 +354,16 @@ class SettingsDialog(Gtk.Dialog):
         label.set_xalign(0)
         return label
 
-    def _browse_xml(self, widget):
-        dialog = Gtk.FileChooserDialog(
-            title="Selecteer producten.xml", transient_for=self, action=Gtk.FileChooserAction.OPEN
-        )
-        dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK)
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            self.xml_path_entry.set_text(dialog.get_filename())
-        dialog.destroy()
-
     def apply_to_config(self):
-        self.config.set("storage", {
-            "xml_path": self.xml_path_entry.get_text().strip(),
-        })
         self.config.set("toon_thumbnail_fallback", self.thumbnail_check.get_active())
 
 
 # ============================================
 # HOOFDVENSTER
 # ============================================
-class MainWindow(Gtk.Window):
+class MainWindow(TabBasis):
     def __init__(self):
-        super().__init__(title="Marktplaats Barcode Scanner")
+        super().__init__(title="Barcode scanner")
         self.set_default_size(750, 650)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_border_width(15)
@@ -462,10 +443,10 @@ class MainWindow(Gtk.Window):
         self.connect("show", lambda w: self.scan_entry.grab_focus())
 
     def _update_backend_label(self):
-        self.backend_label.set_markup("<small>Opslag: <b>XML</b></small>")
+        self.backend_label.set_markup(f"<small>📁 {GLib.markup_escape_text(get_xml_path())}</small>")
 
     def _open_settings(self, widget):
-        dialog = SettingsDialog(self, self.config)
+        dialog = SettingsDialog(self.top(), self.config)
         response = dialog.run()
         if response == Gtk.ResponseType.OK:
             dialog.apply_to_config()
@@ -748,7 +729,7 @@ class MainWindow(Gtk.Window):
             self.status_label.set_markup(f"<span foreground='red'>❌ Kon map niet openen: {e}</span>")
 
     def _markeer_verkocht(self, product):
-        dialog = Gtk.Dialog(title="Markeer als verkocht", transient_for=self, flags=0)
+        dialog = Gtk.Dialog(title="Markeer als verkocht", transient_for=self.top(), flags=0)
         dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OK, Gtk.ResponseType.OK)
         box = dialog.get_content_area()
         box.set_spacing(8)
@@ -778,12 +759,8 @@ class MainWindow(Gtk.Window):
 
 
 def main():
-    GLib.set_prgname("marktplaats_barcode_scanner")
     apply_css()
-    win = MainWindow()
-    win.connect("destroy", Gtk.main_quit)
-    win.show_all()
-    Gtk.main()
+    run_standalone(MainWindow, "Marktplaats Barcode Scanner", 750, 650)
 
 
 if __name__ == "__main__":

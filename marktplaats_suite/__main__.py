@@ -1,11 +1,4 @@
-"""python -m marktplaats_suite [module]  (zonder argument: startscherm)"""
-import importlib
-import sys
+"""python -m marktplaats_suite  -> start de Marktplaats Suite (één venster met alle onderdelen)."""
+from marktplaats_suite.productmanager import main
 
-NAMEN = ("productmanager", "fotomanager", "scanner", "automater")
-
-if len(sys.argv) > 1 and sys.argv[1] in NAMEN:
-    importlib.import_module(f"marktplaats_suite.{sys.argv[1]}").main()
-else:
-    from marktplaats_suite.launcher import main
-    main()
+main()

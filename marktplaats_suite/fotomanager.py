@@ -10,7 +10,7 @@ gi.require_version('GdkPixbuf', '2.0')
 from gi.repository import Gtk, Gdk, GLib, Gio, GdkPixbuf
 import subprocess
 import os
-from marktplaats_suite.common import data_dir, asset
+from marktplaats_suite.common import data_dir, asset, TabBasis, run_standalone
 import shutil
 import glob
 import random
@@ -734,9 +734,9 @@ class CustomFileChooser(Gtk.Dialog):
         return self.selected_files
 
 
-class MarktplaatsApp(Gtk.Window):
+class MarktplaatsApp(TabBasis):
     def __init__(self):
-        super().__init__(title="Marktplaats Foto Manager")
+        super().__init__(title="Foto's")
 
         self.set_default_size(900, 650)
         self.set_border_width(15)
@@ -1100,7 +1100,7 @@ class MarktplaatsApp(Gtk.Window):
             self.files_count_label.set_markup(f"<small>{count} bestanden geselecteerd</small>")
 
     def browse_files_with_icons(self, widget):
-        chooser = CustomFileChooser(self, "Selecteer foto's (grote pictogrammen)", select_multiple=True, start_folder=os.path.expanduser("~/Downloads"))
+        chooser = CustomFileChooser(self.top(), "Selecteer foto's (grote pictogrammen)", select_multiple=True, start_folder=os.path.expanduser("~/Downloads"))
         response = chooser.run()
 
         if response == Gtk.ResponseType.OK:
@@ -1185,7 +1185,7 @@ class MarktplaatsApp(Gtk.Window):
             self.log_message(f"Tool gewijzigd naar: {tool_name}")
 
     def browse_source(self, widget):
-        dialog = Gtk.FileChooserDialog(title="Selecteer bronmap", parent=self, action=Gtk.FileChooserAction.SELECT_FOLDER)
+        dialog = Gtk.FileChooserDialog(title="Selecteer bronmap", parent=self.top(), action=Gtk.FileChooserAction.SELECT_FOLDER)
         dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK)
 
         current_dir = self.config.get('source_dir', '')
@@ -1198,7 +1198,7 @@ class MarktplaatsApp(Gtk.Window):
         dialog.destroy()
 
     def browse_output(self, widget):
-        dialog = Gtk.FileChooserDialog(title="Selecteer uitvoermap", parent=self, action=Gtk.FileChooserAction.SELECT_FOLDER)
+        dialog = Gtk.FileChooserDialog(title="Selecteer uitvoermap", parent=self.top(), action=Gtk.FileChooserAction.SELECT_FOLDER)
         dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK)
 
         current_dir = self.config.get('output_dir', '')
@@ -1211,7 +1211,7 @@ class MarktplaatsApp(Gtk.Window):
         dialog.destroy()
 
     def browse_watermark(self, widget):
-        dialog = Gtk.FileChooserDialog(title="Selecteer watermerk", parent=self, action=Gtk.FileChooserAction.OPEN)
+        dialog = Gtk.FileChooserDialog(title="Selecteer watermerk", parent=self.top(), action=Gtk.FileChooserAction.OPEN)
         dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK)
         filter_png = Gtk.FileFilter()
         filter_png.set_name("PNG afbeeldingen")
@@ -1228,7 +1228,7 @@ class MarktplaatsApp(Gtk.Window):
         dialog.destroy()
 
     def browse_logo(self, widget):
-        dialog = Gtk.FileChooserDialog(title="Selecteer logo", parent=self, action=Gtk.FileChooserAction.OPEN)
+        dialog = Gtk.FileChooserDialog(title="Selecteer logo", parent=self.top(), action=Gtk.FileChooserAction.OPEN)
         dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK)
         filter_img = Gtk.FileFilter()
         filter_img.set_name("Afbeeldingen")
@@ -1246,7 +1246,7 @@ class MarktplaatsApp(Gtk.Window):
         dialog.destroy()
 
     def browse_background_image(self, widget):
-        dialog = Gtk.FileChooserDialog(title="Selecteer achtergrond afbeelding", parent=self, action=Gtk.FileChooserAction.OPEN)
+        dialog = Gtk.FileChooserDialog(title="Selecteer achtergrond afbeelding", parent=self.top(), action=Gtk.FileChooserAction.OPEN)
         dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK)
         filter_img = Gtk.FileFilter()
         filter_img.set_name("Afbeeldingen")
@@ -1346,7 +1346,7 @@ class MarktplaatsApp(Gtk.Window):
         with open(os.path.join(data_dir(), "fotomanager_config.json"), 'w') as f:
             json.dump(self.config, f, indent=2)
         self.log_message("Instellingen opgeslagen")
-        dialog = Gtk.MessageDialog(parent=self, flags=0, message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="Instellingen opgeslagen!")
+        dialog = Gtk.MessageDialog(parent=self.top(), flags=0, message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="Instellingen opgeslagen!")
         dialog.run()
         dialog.destroy()
 
@@ -1894,7 +1894,7 @@ class MarktplaatsApp(Gtk.Window):
     def ask_for_article_number_original(self, files_with_logo, temp_with_logo_dir, temp_square_dir):
         self.log_message("Vraag artikelnummer (originele achtergrond modus)...")
 
-        dialog = Gtk.Dialog(title="Artikelnummer", parent=self, flags=0)
+        dialog = Gtk.Dialog(title="Artikelnummer", parent=self.top(), flags=0)
         dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OK, Gtk.ResponseType.OK)
         dialog.set_default_size(500, 350)
         dialog.set_modal(True)
@@ -2004,7 +2004,7 @@ class MarktplaatsApp(Gtk.Window):
                 success_msg += f"📁 met_logo/ - {len(files_with_logo)} bestanden\n"
                 success_msg += f"\n📍 Locatie: {final_dir}"
 
-                success_dialog = Gtk.MessageDialog(parent=self, flags=0, message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="Verwerking voltooid!")
+                success_dialog = Gtk.MessageDialog(parent=self.top(), flags=0, message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="Verwerking voltooid!")
                 success_dialog.format_secondary_text(success_msg)
                 success_dialog.run()
                 success_dialog.destroy()
@@ -2019,7 +2019,7 @@ class MarktplaatsApp(Gtk.Window):
     def ask_for_article_number(self, white_files, white_with_logo, bg_files, bg_with_logo, temp_square_dir, has_logo_files):
         self.log_message("Vraag artikelnummer...")
 
-        dialog = Gtk.Dialog(title="Artikelnummer", parent=self, flags=0)
+        dialog = Gtk.Dialog(title="Artikelnummer", parent=self.top(), flags=0)
         dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OK, Gtk.ResponseType.OK)
         dialog.set_default_size(500, 450)
         dialog.set_modal(True)
@@ -2182,7 +2182,7 @@ class MarktplaatsApp(Gtk.Window):
                         success_msg += f"📁 met_logo_bg/ - {len(bg_with_logo)} bestanden\n"
                 success_msg += f"\n📍 Locatie: {final_dir}"
 
-                success_dialog = Gtk.MessageDialog(parent=self, flags=0, message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="Verwerking voltooid!")
+                success_dialog = Gtk.MessageDialog(parent=self.top(), flags=0, message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="Verwerking voltooid!")
                 success_dialog.format_secondary_text(success_msg)
                 success_dialog.run()
                 success_dialog.destroy()
@@ -2247,7 +2247,7 @@ class MarktplaatsApp(Gtk.Window):
         return False
 
     def show_error(self, message):
-        dialog = Gtk.MessageDialog(parent=self, flags=0, message_type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK, text=message)
+        dialog = Gtk.MessageDialog(parent=self.top(), flags=0, message_type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK, text=message)
         dialog.run()
         dialog.destroy()
 
@@ -2256,11 +2256,7 @@ class MarktplaatsApp(Gtk.Window):
 
 
 def main():
-    GLib.set_prgname("marktplaats_manager")
-    app = MarktplaatsApp()
-    app.connect("destroy", Gtk.main_quit)
-    app.show_all()
-    Gtk.main()
+    run_standalone(MarktplaatsApp, "Marktplaats Foto Manager", 900, 650)
 
 
 if __name__ == "__main__":

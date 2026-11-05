@@ -14,7 +14,7 @@ dependencies = ["pillow", "python-barcode", "openpyxl", "python-docx", "Send2Tra
 ai = ["transparent-background", "rembg", "opencv-python", "numpy", "tqdm", "psutil"]
 
 [project.scripts]
-marktplaats-suite = "marktplaats_suite.launcher:main"
+marktplaats-suite = "marktplaats_suite.productmanager:main"
 
 [tool.setuptools]
 packages = ["marktplaats_suite"]
