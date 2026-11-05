@@ -22,6 +22,56 @@ def asset(naam):
     return os.path.join(ASSETS_DIR, naam)
 
 
+# Gedeelde kolomlijst voor producten.xml: ALLE onderdelen gebruiken deze, zodat geen enkel
+# onderdeel velden van een ander onderdeel kan wissen. Nieuwe velden alleen achteraan toevoegen.
+COLUMNS = [
+    "artikelnummer",
+    "titel",
+    "categorie",
+    "omschrijving",
+    "online",
+    "lengte",
+    "breedte",
+    "hoogte",
+    "gewicht",
+    "conditie",
+    "staat_details",
+    "waarde_min",
+    "waarde_max",
+    "vraagprijs",
+    "aanmaakdatum",
+    "aanmaaktijd",
+    "tijdsperiode",
+    "opslaglocatie",
+    "sublocatie",
+    "rij",
+    "folder_locatie",
+    "verkocht",
+    "verkoopprijs",
+    "verkoopdatum",
+    "algemene_voorwaarden",
+    "url_1",
+    "url_2",
+    "url_3",
+    "url_4",
+    "url_5",
+    "leverwijze",
+    "klant_naam",
+    "klant_telefoon",
+    "klant_email",
+    "ophaal_afspraak",
+    "track_trace",
+    "verwerkt_door",
+    "toegewezen_aan",
+    "gereserveerd",
+    "reserveprijs",
+    "reserveerdatum",
+    "reservering_klant_naam",
+    "marktplaats_categorie",
+]
+COL = {name: idx for idx, name in enumerate(COLUMNS)}
+
+
 # ---------------------------------------------------------------------
 # Gedeelde instellingen: één plek voor XML-pad en algemene voorwaarden
 # ---------------------------------------------------------------------
