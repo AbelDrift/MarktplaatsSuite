@@ -1155,7 +1155,7 @@ class MarktplaatsApp(TabBasis):
             import transparent_background
             tools_status.append("✅ Transparent-Background (geïnstalleerd)")
             self.tool_transparent.set_sensitive(True)
-        except ImportError:
+        except (ImportError, SystemExit):  # rembg stopt met exit(1) zonder onnxruntime
             tools_status.append("❌ Transparent-Background (niet geïnstalleerd)")
             self.tool_transparent.set_sensitive(False)
 
@@ -1163,7 +1163,7 @@ class MarktplaatsApp(TabBasis):
             import rembg
             tools_status.append("✅ Rembg (geïnstalleerd)")
             self.tool_rembg.set_sensitive(True)
-        except ImportError:
+        except (ImportError, SystemExit):  # rembg stopt met exit(1) zonder onnxruntime
             tools_status.append("❌ Rembg (niet geïnstalleerd)")
             self.tool_rembg.set_sensitive(False)
 
@@ -1408,13 +1408,13 @@ class MarktplaatsApp(TabBasis):
             if tool == 'transparent-background':
                 try:
                     import transparent_background
-                except ImportError:
+                except (ImportError, SystemExit):  # rembg stopt met exit(1) zonder onnxruntime
                     self.show_error("Transparent-Background is niet geïnstalleerd!\nInstalleer met: pip install transparent-background")
                     return
             else:
                 try:
                     import rembg
-                except ImportError:
+                except (ImportError, SystemExit):  # rembg stopt met exit(1) zonder onnxruntime
                     self.show_error("Rembg is niet geïnstalleerd!\nInstalleer met: pip install rembg")
                     return
 

@@ -4555,9 +4555,13 @@ class MainWindow(Gtk.Window):
             return None
 
     def _voeg_foutmelding_tab_toe(self, titel, fout):
+        import traceback
+        details = "".join(traceback.format_exception(type(fout), fout, fout.__traceback__))[-1500:]
+        print(f"[{titel}] kon niet worden geladen:\n{details}")
         lbl = Gtk.Label()
         lbl.set_markup(f"<b>{GLib.markup_escape_text(titel)} kon niet worden geladen</b>\n\n"
-                       f"{GLib.markup_escape_text(str(fout) or type(fout).__name__)}\n\n"
+                       f"{GLib.markup_escape_text(type(fout).__name__ + ': ' + str(fout))}\n\n"
+                       f"<small>{GLib.markup_escape_text(details)}</small>\n\n"
                        "Draai ./install.sh opnieuw om ontbrekende pakketten te installeren.")
         lbl.set_line_wrap(True); lbl.set_selectable(True)
         self.notebook.append_page(lbl, Gtk.Label(label=titel))

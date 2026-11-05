@@ -11,7 +11,7 @@ dependencies = ["pillow", "python-barcode", "openpyxl", "python-docx", "Send2Tra
                 "brother_ql", "selenium", "requests"]
 
 [project.optional-dependencies]
-ai = ["transparent-background", "rembg", "opencv-python", "numpy", "tqdm", "psutil"]
+ai = ["transparent-background", "rembg[cpu]", "onnxruntime", "opencv-python", "numpy", "tqdm", "psutil"]
 
 [project.scripts]
 marktplaats-suite = "marktplaats_suite.productmanager:main"
