@@ -8,10 +8,10 @@ Alles in **één venster** met tabs:
 
 | Tab | Was | Doel |
 |---|---|---|
-| 📝 Registreren / 📊 Overzicht / 📈 Dashboard | MarktplaatsProductmanager | Producten registreren, labels/barcodes, verkocht/retour/gereserveerd, statistieken |
-| 📷 Foto's | MarktplaatsFotoManager | Foto's verwerken (achtergrond, watermerk, logo, mappenstructuur) |
-| 🔍 Scanner | MarktplaatsScanner | USB-barcodescanner met productinfo en foto |
-| 🤖 Automater | MarktplaatsAutomater | Advertenties automatisch plaatsen (Selenium + Chrome/Chromium) |
+| 📝 Nieuw Product / 📊 Product Management / 📈 Sales Dashboard | MarktplaatsProductmanager | Producten registreren, labels/barcodes, verkocht/retour/gereserveerd, statistieken |
+| 📷 Product Studio | MarktplaatsFotoManager | Foto's verwerken (achtergrond, watermerk, logo, mappenstructuur) |
+| 🔍 Product Scanner | MarktplaatsScanner | USB-barcodescanner met productinfo en foto |
+| 🤖 Product Uploader | MarktplaatsAutomater | Advertenties automatisch plaatsen, nu alleen voor Marktplaats (Selenium + Chrome/Chromium) |
 
 Start met `marktplaats-suite` of via het applicatiemenu.
 

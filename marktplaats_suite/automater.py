@@ -721,6 +721,13 @@ class App:
         settings_box.set_border_width(10)
         notebook.append_page(settings_box, Gtk.Label(label="⚙️ Instellingen"))
 
+        platform_hint = Gtk.Label()
+        platform_hint.set_markup("<small><i>ℹ️ De Product Uploader is nu alleen ingesteld voor <b>Marktplaats</b>: "
+                                 "de kliks en toetsaanslagen zijn daarop afgestemd. Catawiki en Whoppah volgen.</i></small>")
+        platform_hint.set_xalign(0)
+        platform_hint.set_line_wrap(True)
+        settings_box.pack_start(platform_hint, False, False, 0)
+
         # Chrome profiel sectie
         label = Gtk.Label()
         label.set_markup("<b>Chrome Profiel</b>")

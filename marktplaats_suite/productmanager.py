@@ -4476,25 +4476,25 @@ class MainWindow(Gtk.Window):
         vbox.pack_start(self.notebook, True, True, 0)
 
         self.registreer_tab = RegistreerTab(self)
-        self.notebook.append_page(self.registreer_tab, Gtk.Label(label="📝 Registreren"))
+        self.notebook.append_page(self.registreer_tab, Gtk.Label(label="📝 Nieuw Product"))
 
         self.overzicht_tab = OverzichtTab(self)
-        self.notebook.append_page(self.overzicht_tab, Gtk.Label(label="📊 Overzicht"))
+        self.notebook.append_page(self.overzicht_tab, Gtk.Label(label="📊 Product Management"))
 
         # Dashboard als tab (direct laden, geen placeholder)
         self.dashboard_tab = DashboardTab(self)
-        self.notebook.append_page(self.dashboard_tab, Gtk.Label(label="📈 Dashboard"))
+        self.notebook.append_page(self.dashboard_tab, Gtk.Label(label="📈 Sales Dashboard"))
 
         # Overige onderdelen van de Marktplaats Suite als tabs
-        self.foto_tab = self._maak_onderdeel_tab("📷 Foto's", "marktplaats_suite.fotomanager", "MarktplaatsApp")
-        self.scanner_tab = self._maak_onderdeel_tab("🔍 Scanner", "marktplaats_suite.scanner", "MainWindow")
+        self.foto_tab = self._maak_onderdeel_tab("📷 Product Studio", "marktplaats_suite.fotomanager", "MarktplaatsApp")
+        self.scanner_tab = self._maak_onderdeel_tab("🔍 Product Scanner", "marktplaats_suite.scanner", "MainWindow")
         self.automater_app = None
         try:
             from marktplaats_suite.automater import App as AutomaterApp
             self.automater_app = AutomaterApp()
-            self.notebook.append_page(self.automater_app.window, Gtk.Label(label="🤖 Automater"))
+            self.notebook.append_page(self.automater_app.window, Gtk.Label(label="🤖 Product Uploader"))
         except (Exception, SystemExit) as e:
-            self._voeg_foutmelding_tab_toe("🤖 Automater", e)
+            self._voeg_foutmelding_tab_toe("🤖 Product Uploader", e)
         self.connect("delete-event", self._on_delete_event)
         self.connect("destroy", lambda *_: self.automater_app and self.automater_app.sluit())
 
@@ -4627,7 +4627,7 @@ class MainWindow(Gtk.Window):
     def _herbouw_registreer_tab(self):
         self.notebook.remove_page(0)
         self.registreer_tab = RegistreerTab(self)
-        self.notebook.insert_page(self.registreer_tab, Gtk.Label(label="📝 Registreren"), 0)
+        self.notebook.insert_page(self.registreer_tab, Gtk.Label(label="📝 Nieuw Product"), 0)
         self.notebook.show_all()
 
 
