@@ -115,7 +115,50 @@ def lees_algemene_voorwaarden_bestand(pad):
 # ============================================
 # KOLOMSTRUCTUUR (gedeeld met auto_marktplaats.py)
 # ============================================
-from marktplaats_suite.common import COLUMNS
+COLUMNS = [
+    "artikelnummer",      # A (0)
+    "titel",               # B (1)
+    "categorie",            # C (2)
+    "omschrijving",          # D (3)
+    "online",                 # E (4)
+    "lengte",                  # F (5)
+    "breedte",                  # G (6)
+    "hoogte",                     # H (7)
+    "gewicht",                     # I (8)
+    "conditie",                     # J (9)
+    "staat_details",                 # K (10)
+    "waarde_min",                     # L (11)
+    "waarde_max",                      # M (12)
+    "vraagprijs",                       # N (13)
+    "aanmaakdatum",                      # O (14)
+    "aanmaaktijd",                       # P (15)
+    "tijdsperiode",                       # Q (16)
+    "opslaglocatie",                       # R (17)
+    "sublocatie",                           # S (18)
+    "rij",                                   # T (19)
+    "folder_locatie",                         # U (20)
+    "verkocht",                                 # V (21)
+    "verkoopprijs",                              # W (22)
+    "verkoopdatum",                               # X (23)
+    "algemene_voorwaarden",                        # Y (24)
+    "url_1",                                       # Z (25)
+    "url_2",                                       # AA (26)
+    "url_3",                                       # AB (27)
+    "url_4",                                       # AC (28)
+    "url_5",                                       # AD (29)
+    "leverwijze",                                   # AE (30)
+    "klant_naam",                                   # AF (31)
+    "klant_telefoon",                               # AG (32)
+    "klant_email",                                   # AH (33)
+    "ophaal_afspraak",                               # AI (34)
+    "track_trace",                                   # AJ (35)
+    "verwerkt_door",                                 # AK (36)
+    "toegewezen_aan",                                # AL (37)
+    "gereserveerd",                                  # AM (38)
+    "reserveprijs",                                  # AN (39)
+    "reserveerdatum",                                # AO (40)
+    "reservering_klant_naam",                        # AP (41)
+]
 COL = {name: idx for idx, name in enumerate(COLUMNS)}
 
 # ============================================
@@ -152,7 +195,6 @@ KOLOM_LABELS = {
     "url_3": "URL 3",
     "url_4": "URL 4",
     "url_5": "URL 5",
-    "marktplaats_categorie": "Marktplaats-categorie",
     "leverwijze": "Leverwijze",
     "klant_naam": "Klant naam",
     "klant_telefoon": "Klant telefoon",
@@ -1829,14 +1871,6 @@ class RegistreerTab(Gtk.Box):
         cat_row.pack_start(tp_col, True, True, 0)
         form.pack_start(cat_row, False, False, 0)
 
-        # Categorie op Marktplaats (bepaalt welke kenmerken en verzendopties Marktplaats toont)
-        mp_col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
-        mp_col.pack_start(self._label("Marktplaats-categorie (optioneel; de Automater kiest deze, anders de eerste suggestie)"), False, False, 0)
-        self.mp_categorie_entry = Gtk.Entry()
-        self.mp_categorie_entry.set_placeholder_text("bijv. Krukjes, Lampen | Losse lampen, Overige meubels")
-        mp_col.pack_start(self.mp_categorie_entry, False, False, 0)
-        form.pack_start(mp_col, False, False, 0)
-
         # Conditie
         form.pack_start(self._label("Staat van het artikel"), False, False, 0)
         self.conditie_combo = Gtk.ComboBoxText()
@@ -1862,15 +1896,6 @@ class RegistreerTab(Gtk.Box):
         for e in (self.lengte_entry, self.breedte_entry, self.hoogte_entry, self.gewicht_entry):
             dim_row.pack_start(e, True, True, 0)
         form.pack_start(dim_row, False, False, 0)
-
-        self.verzendadvies_label = Gtk.Label()
-        self.verzendadvies_label.set_xalign(0)
-        self.verzendadvies_label.set_line_wrap(True)
-        self.verzendadvies_label.set_no_show_all(True)
-        form.pack_start(self.verzendadvies_label, False, False, 0)
-        for e in (self.lengte_entry, self.breedte_entry, self.hoogte_entry, self.gewicht_entry,
-                  self.mp_categorie_entry):
-            e.connect("changed", self._update_verzendadvies)
 
         # Waarde & vraagprijs
         form.pack_start(self._label("Geschatte waarde en vraagprijs (€)"), False, False, 0)
@@ -2189,21 +2214,6 @@ class RegistreerTab(Gtk.Box):
         entry.set_placeholder_text(placeholder)
         return entry
 
-    def _update_verzendadvies(self, *_):
-        from marktplaats_suite.verzending import advies_tekst
-        try:
-            tekst = advies_tekst(self.lengte_entry.get_text(), self.breedte_entry.get_text(),
-                                 self.hoogte_entry.get_text(), self.gewicht_entry.get_text(),
-                                 self.mp_categorie_entry.get_text())
-        except Exception as e:  # advies mag het formulier nooit blokkeren
-            tekst = ""
-            print(f"Verzendadvies fout: {e}")
-        self.verzendadvies_label.set_text(tekst)
-        if tekst:
-            self.verzendadvies_label.show()
-        else:
-            self.verzendadvies_label.hide()
-
     def _on_titel_changed(self, widget):
         length = len(widget.get_text())
         self.titel_counter.set_text(f"{length}/{MAX_TITEL_LENGTE}")
@@ -2232,7 +2242,6 @@ class RegistreerTab(Gtk.Box):
         self.titel_entry.set_text("")
         self.omschrijving_view.get_buffer().set_text("")
         self.categorie_combo.get_child().set_text("")
-        self.mp_categorie_entry.set_text("")
         self.tijdsperiode_combo.get_child().set_text("")
         self.conditie_combo.set_active(0)
         self.staat_details_extra_entry.set_text("")
@@ -2283,7 +2292,6 @@ class RegistreerTab(Gtk.Box):
             "artikelnummer": artikelnummer,
             "titel": titel,
             "categorie": self.categorie_combo.get_active_text() or "",
-            "marktplaats_categorie": self.mp_categorie_entry.get_text().strip(),
             "omschrijving": omschrijving,
             "lengte": self.lengte_entry.get_text().strip(),
             "breedte": self.breedte_entry.get_text().strip(),
@@ -4414,11 +4422,6 @@ class MainWindow(Gtk.Window):
             except Exception:
                 pass
 
-        try:
-            from marktplaats_suite.verzending import sla_standaard_op_als_nodig
-            sla_standaard_op_als_nodig()  # maakt verzendtabel.json aan, zodat je die kunt aanpassen
-        except Exception as e:
-            print(f"Verzendtabel niet aangemaakt: {e}")
         self.config = ConfigManager()
         self.gebruikersnaam = gebruikersnaam
         self.user_manager = user_manager
@@ -4476,25 +4479,25 @@ class MainWindow(Gtk.Window):
         vbox.pack_start(self.notebook, True, True, 0)
 
         self.registreer_tab = RegistreerTab(self)
-        self.notebook.append_page(self.registreer_tab, Gtk.Label(label="📝 Nieuw Product"))
+        self.notebook.append_page(self.registreer_tab, Gtk.Label(label="📝 Registreren"))
 
         self.overzicht_tab = OverzichtTab(self)
-        self.notebook.append_page(self.overzicht_tab, Gtk.Label(label="📊 Product Management"))
+        self.notebook.append_page(self.overzicht_tab, Gtk.Label(label="📊 Overzicht"))
 
         # Dashboard als tab (direct laden, geen placeholder)
         self.dashboard_tab = DashboardTab(self)
-        self.notebook.append_page(self.dashboard_tab, Gtk.Label(label="📈 Sales Dashboard"))
+        self.notebook.append_page(self.dashboard_tab, Gtk.Label(label="📈 Dashboard"))
 
         # Overige onderdelen van de Marktplaats Suite als tabs
-        self.foto_tab = self._maak_onderdeel_tab("📷 Product Studio", "marktplaats_suite.fotomanager", "MarktplaatsApp")
-        self.scanner_tab = self._maak_onderdeel_tab("🔍 Product Scanner", "marktplaats_suite.scanner", "MainWindow")
+        self.foto_tab = self._maak_onderdeel_tab("📷 Foto's", "marktplaats_suite.fotomanager", "MarktplaatsApp")
+        self.scanner_tab = self._maak_onderdeel_tab("🔍 Scanner", "marktplaats_suite.scanner", "MainWindow")
         self.automater_app = None
         try:
             from marktplaats_suite.automater import App as AutomaterApp
             self.automater_app = AutomaterApp()
-            self.notebook.append_page(self.automater_app.window, Gtk.Label(label="🤖 Product Uploader"))
+            self.notebook.append_page(self.automater_app.window, Gtk.Label(label="🤖 Automater"))
         except (Exception, SystemExit) as e:
-            self._voeg_foutmelding_tab_toe("🤖 Product Uploader", e)
+            self._voeg_foutmelding_tab_toe("🤖 Automater", e)
         self.connect("delete-event", self._on_delete_event)
         self.connect("destroy", lambda *_: self.automater_app and self.automater_app.sluit())
 
@@ -4627,7 +4630,7 @@ class MainWindow(Gtk.Window):
     def _herbouw_registreer_tab(self):
         self.notebook.remove_page(0)
         self.registreer_tab = RegistreerTab(self)
-        self.notebook.insert_page(self.registreer_tab, Gtk.Label(label="📝 Nieuw Product"), 0)
+        self.notebook.insert_page(self.registreer_tab, Gtk.Label(label="📝 Registreren"), 0)
         self.notebook.show_all()
 
 

@@ -30,7 +30,16 @@ import urllib.error
 # ============================================
 # KOLOMSTRUCTUUR (gedeeld met de andere apps)
 # ============================================
-from marktplaats_suite.common import COLUMNS
+COLUMNS = [
+    "artikelnummer", "titel", "categorie", "omschrijving", "online",
+    "lengte", "breedte", "hoogte", "gewicht", "conditie", "staat_details",
+    "waarde_min", "waarde_max", "vraagprijs", "aanmaakdatum", "aanmaaktijd",
+    "tijdsperiode", "opslaglocatie", "sublocatie", "rij", "folder_locatie",
+    "verkocht", "verkoopprijs", "verkoopdatum", "algemene_voorwaarden",
+    "url_1", "url_2", "url_3", "url_4", "url_5",
+    "leverwijze", "klant_naam", "klant_telefoon", "klant_email",
+    "ophaal_afspraak", "track_trace", "verwerkt_door", "toegewezen_aan",
+]
 
 TEXTVIEW_CSS = b"""
 textview {
@@ -149,30 +158,23 @@ def find_product(config, artikelnummer):
 
 
 def mark_product_sold(config, artikelnummer, verkoopprijs):
-    """Markeert een product als verkocht in de XML. Past ALLEEN dit ene product aan
-    (in-place), zodat velden en producten die de scanner niet kent behouden blijven."""
-    import xml.etree.ElementTree as ET
+    """Markeert een product als verkocht in de XML."""
     vandaag = datetime.date.today().isoformat()
 
     xml_path = get_xml_path()
-    if not os.path.exists(xml_path):
-        raise FileNotFoundError(f"XML-bestand niet gevonden: {xml_path}")
-    tree = ET.parse(xml_path)
+    products = load_all_products_xml(xml_path)
     gevonden = False
-    for prod_el in tree.getroot().findall("product"):
-        nr = prod_el.find("artikelnummer")
-        if nr is not None and (nr.text or "").strip() == artikelnummer:
-            for tag, waarde in (("verkocht", "ja"), ("verkoopprijs", str(verkoopprijs)),
-                                ("verkoopdatum", vandaag)):
-                el = prod_el.find(tag)
-                if el is None:
-                    el = ET.SubElement(prod_el, tag)
-                el.text = waarde
+    for p in products:
+        if p.get("artikelnummer", "").strip() == artikelnummer:
+            p["verkocht"] = "ja"
+            p["verkoopprijs"] = verkoopprijs
+            p["verkoopdatum"] = vandaag
             gevonden = True
             break
     if not gevonden:
         raise ValueError("Product niet gevonden in XML")
-    tree.write(xml_path, encoding="utf-8", xml_declaration=True)
+    save_all_products_xml(xml_path, products)
+
     return vandaag
 
 

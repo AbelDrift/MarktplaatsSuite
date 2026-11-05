@@ -167,7 +167,16 @@ Zondag en maandag Gesloten"""
 
 # Kolomvolgorde - identiek aan marktplaats_productmanager.py, zodat
 # beide apps dezelfde Sheet/XML kunnen lezen/schrijven.
-from marktplaats_suite.common import COLUMNS
+COLUMNS = [
+    "artikelnummer", "titel", "categorie", "omschrijving", "online",
+    "lengte", "breedte", "hoogte", "gewicht", "conditie", "staat_details",
+    "waarde_min", "waarde_max", "vraagprijs", "aanmaakdatum", "aanmaaktijd",
+    "tijdsperiode", "opslaglocatie", "sublocatie", "rij", "folder_locatie",
+    "verkocht", "verkoopprijs", "verkoopdatum", "algemene_voorwaarden",
+    "url_1", "url_2", "url_3", "url_4", "url_5",
+    "leverwijze", "klant_naam", "klant_telefoon", "klant_email",
+    "ophaal_afspraak", "track_trace", "verwerkt_door", "toegewezen_aan",
+]
 COL = {naam: idx for idx, naam in enumerate(COLUMNS)}
 
 def build_description(product):
@@ -387,81 +396,6 @@ class MarktplaatsAuto:
         else:
             self.logger.info(f"⏹️ Gestopt na {processed} producten")
 
-    # ------------------------------------------------------------------
-    # Keuzes op de Marktplaats-pagina op basis van tekst (radio/checkbox)
-    # ------------------------------------------------------------------
-    _JS_ZOEK_KEUZE = """
-        const soort = arguments[0], tekst = arguments[1].toLowerCase(), begin = arguments[2];
-        const norm = s => s.replace(/\\s+/g, ' ').trim().toLowerCase();
-        let beste = null, besteLen = 1e9;
-        for (const inp of document.querySelectorAll('input[type=' + soort + ']')) {
-            // zoek de bijbehorende tekst: label[for], omringend label, ouder of grootouder (alleen korte teksten)
-            const lbl = inp.id ? document.querySelector('label[for="' + inp.id + '"]') : null;
-            const kandidaten = [lbl, inp.closest('label'), inp.parentElement,
-                                inp.parentElement && inp.parentElement.parentElement];
-            let t = '';
-            for (const c of kandidaten) {
-                const ct = c ? norm(c.textContent || '') : '';
-                if (ct && ct.length < 120) { t = ct; break; }
-            }
-            if (!t) continue;
-            const ok = begin ? t.startsWith(tekst) : t.includes(tekst);
-            if (ok && t.length < besteLen) { beste = inp; besteLen = t.length; }
-        }
-        return beste;
-    """
-
-    def _zet_keuze(self, soort, tekst, aan=True, begin=False):
-        """Zet een radio/checkbox aan of uit op basis van de zichtbare tekst. True als gevonden."""
-        inp = self.driver.execute_script(self._JS_ZOEK_KEUZE, soort, tekst, begin)
-        if inp is None:
-            return False
-        huidig = bool(self.driver.execute_script("return arguments[0].checked;", inp))
-        if huidig != aan:
-            self.driver.execute_script(
-                "arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", inp)
-            time.sleep(0.4)
-        return True
-
-    def _klik_verder(self):
-        """Klikt op de knop 'Verder'; valt terug op Tab-navigatie zoals voorheen."""
-        try:
-            knop = self.driver.find_element(
-                By.XPATH, "//button[normalize-space()='Verder' or .//*[normalize-space()='Verder']]")
-            self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", knop)
-            knop.click()
-            return
-        except Exception:
-            self.logger.warning("   ⚠️ Knop 'Verder' niet gevonden, ik probeer toetsenbordnavigatie")
-        actions = ActionChains(self.driver)
-        for _ in range(4):
-            actions.send_keys(Keys.TAB)
-        actions.send_keys(Keys.ENTER).perform()
-
-    def _stel_verzending_in(self, product):
-        """Vinkt passende vervoerders aan en kiest de pakketgrootte op basis van afmetingen en gewicht."""
-        from marktplaats_suite.verzending import kies_automatisch
-        row = product["row"]
-        def veld(naam):
-            return row[COL[naam]] if len(row) > COL[naam] else ""
-        keuze = kies_automatisch(veld("lengte"), veld("breedte"), veld("hoogte"), veld("gewicht"))
-        if not keuze:
-            self.logger.info("   ℹ️ Verzending: geen pakketadvies (afmetingen ontbreken of te groot), handmatig instellen")
-            return
-        klasse, passend = keuze["klasse"], keuze["vervoerders"]
-        # Een verzendkeuze bestaat alleen als de categorie vervoerders toont (niet bij alleen-Brenger)
-        if not self._zet_keuze("checkbox", "postnl", True, begin=True) and not self._zet_keuze("checkbox", "dhl", True, begin=True):
-            self.logger.info("   ℹ️ Verzending: deze categorie toont geen pakketvervoerders (bijv. alleen Brenger), overgeslagen")
-            return
-        for naam in ("Budbee", "PostNL", "DHL"):
-            gewenst = naam in passend
-            if not self._zet_keuze("checkbox", naam.lower(), gewenst, begin=True):
-                continue
-        if self._zet_keuze("radio", klasse.lower(), True, begin=True):
-            self.logger.info(f"   ✅ Verzending: {klasse} via {', '.join(passend)}")
-        else:
-            self.logger.warning(f"   ⚠️ Pakketgrootte '{klasse}' niet gevonden, handmatig kiezen")
-
     def process_one_product(self, product):
         try:
             self.step = 1
@@ -502,17 +436,11 @@ class MarktplaatsAuto:
             title_field.send_keys(Keys.ENTER)
             time.sleep(1)
 
-            row = product["row"]
-            gewenste_cat = (row[COL["marktplaats_categorie"]] if len(row) > COL["marktplaats_categorie"] else "").strip()
-            if gewenste_cat:
-                try:
-                    if self._zet_keuze("radio", gewenste_cat, True):
-                        self.logger.info(f"   ✅ Marktplaats-categorie gekozen: {gewenste_cat}")
-                    else:
-                        self.logger.warning(f"   ⚠️ Categorie '{gewenste_cat}' niet in de suggesties, eerste suggestie blijft staan")
-                except Exception as e:
-                    self.logger.warning(f"   ⚠️ Categorie kiezen mislukt ({e}), eerste suggestie blijft staan")
-            self._klik_verder()
+            actions = ActionChains(self.driver)
+            for _ in range(4):
+                actions.send_keys(Keys.TAB)
+                time.sleep(0.2)
+            actions.send_keys(Keys.ENTER).perform()
             time.sleep(2)
             self.logger.info(f"   ✅ Titel: {title}")
 
@@ -565,19 +493,13 @@ class MarktplaatsAuto:
             else:
                 self.logger.info("   ⚠️ Geen omschrijving-data gevonden, overgeslagen")
 
-            if self.config.get('preferences.auto_verzending', True):
-                try:
-                    self._stel_verzending_in(product)
-                except Exception as e:
-                    self.logger.warning(f"   ⚠️ Verzending automatisch instellen mislukt: {e}")
-
             self.step = 6
             self.logger.step(self.step, "Wacht op gebruiker")
             self.logger.info("")
             self.logger.info("📝 ADVERTENTIE IS BIJNA KLAAR!")
             self.logger.info("📝 Maak de advertentie handmatig af:")
             self.logger.info("   1. Controleer de beschrijving")
-            self.logger.info("   2. Controleer verzending, prijs en eventuele extra velden")
+            self.logger.info("   2. Vul eventuele extra velden in")
             self.logger.info("   3. Klik op 'Plaats advertentie'")
             self.logger.info("")
             self.logger.info("⏸️ Klik op 'Volgende' als de advertentie geplaatst is, of 'Overslaan' om dit product bewust over te slaan")
@@ -721,13 +643,6 @@ class App:
         settings_box.set_border_width(10)
         notebook.append_page(settings_box, Gtk.Label(label="⚙️ Instellingen"))
 
-        platform_hint = Gtk.Label()
-        platform_hint.set_markup("<small><i>ℹ️ De Product Uploader is nu alleen ingesteld voor <b>Marktplaats</b>: "
-                                 "de kliks en toetsaanslagen zijn daarop afgestemd. Catawiki en Whoppah volgen.</i></small>")
-        platform_hint.set_xalign(0)
-        platform_hint.set_line_wrap(True)
-        settings_box.pack_start(platform_hint, False, False, 0)
-
         # Chrome profiel sectie
         label = Gtk.Label()
         label.set_markup("<b>Chrome Profiel</b>")
@@ -820,10 +735,6 @@ class App:
         self.wait_products_entry = Gtk.Entry()
         self.wait_products_entry.set_width_chars(10)
         grid.attach(self.wait_products_entry, 1, 1, 1, 1)
-
-        self.auto_verzending_check = Gtk.CheckButton(
-            label="Verzending automatisch instellen (vervoerders en pakketgrootte op basis van afmetingen en gewicht)")
-        grid.attach(self.auto_verzending_check, 0, 2, 2, 1)
 
         save_btn = Gtk.Button(label="💾 Opslaan")
         save_btn.connect("clicked", self._save_config)
@@ -929,7 +840,6 @@ class App:
         prefs = self.config.get('preferences', {})
         self.max_title_entry.set_text(str(prefs.get('max_title_length', 60)))
         self.wait_products_entry.set_text(str(prefs.get('wait_between_products', 3)))
-        self.auto_verzending_check.set_active(bool(prefs.get('auto_verzending', True)))
 
     def _save_config(self, widget):
         self.config.set('chrome.user_data_dir', self.profile_path_entry.get_text().strip())
@@ -937,7 +847,6 @@ class App:
         self.config.set('paths.base_image_path', self.image_path_entry.get_text().strip())
         self.config.set('preferences.max_title_length', int(self.max_title_entry.get_text().strip() or 60))
         self.config.set('preferences.wait_between_products', int(self.wait_products_entry.get_text().strip() or 3))
-        self.config.set('preferences.auto_verzending', self.auto_verzending_check.get_active())
 
         self.logger.success("✅ Configuratie opgeslagen!")
 

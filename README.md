@@ -8,10 +8,10 @@ Alles in **één venster** met tabs:
 
 | Tab | Was | Doel |
 |---|---|---|
-| 📝 Nieuw Product / 📊 Product Management / 📈 Sales Dashboard | MarktplaatsProductmanager | Producten registreren, labels/barcodes, verkocht/retour/gereserveerd, statistieken |
-| 📷 Product Studio | MarktplaatsFotoManager | Foto's verwerken (achtergrond, watermerk, logo, mappenstructuur) |
-| 🔍 Product Scanner | MarktplaatsScanner | USB-barcodescanner met productinfo en foto |
-| 🤖 Product Uploader | MarktplaatsAutomater | Advertenties automatisch plaatsen, nu alleen voor Marktplaats (Selenium + Chrome/Chromium) |
+| 📝 Registreren / 📊 Overzicht / 📈 Dashboard | MarktplaatsProductmanager | Producten registreren, labels/barcodes, verkocht/retour/gereserveerd, statistieken |
+| 📷 Foto's | MarktplaatsFotoManager | Foto's verwerken (achtergrond, watermerk, logo, mappenstructuur) |
+| 🔍 Scanner | MarktplaatsScanner | USB-barcodescanner met productinfo en foto |
+| 🤖 Automater | MarktplaatsAutomater | Advertenties automatisch plaatsen (Selenium + Chrome/Chromium) |
 
 Start met `marktplaats-suite` of via het applicatiemenu.
 
@@ -54,15 +54,3 @@ naar die map; de fotomanager-instellingen heten nu `fotomanager_config.json`
 - GTK3 onder X11/XWayland (starters zetten `GDK_BACKEND=x11`).
 - De thumbnail-fallback in de scanner leest Marktplaats-pagina's uit en kan breken als de site verandert.
 - Getest op syntax en installeerbaarheid; de GUI zelf moet op een echt Debian/Ubuntu-bureaublad worden uitgeprobeerd.
-
-## Verzendadvies en slimme Automater
-
-- In **Registreren** verschijnt onder afmetingen/gewicht een live **verzendadvies**: welke pakketklasse en
-  vervoerder passen (inclusief 2 cm / 0,3 kg verpakkingsmarge) en wat het kost. Limieten en prijzen staan in
-  `verzendtabel.json` in de datamap en zijn aanpasbaar.
-- Het veld **Marktplaats-categorie** bepaalt welke suggestie de Automater kiest (anders de eerste). Je krijgt
-  een waarschuwing als de gekozen categorie alleen Brenger toont terwijl het product in een pakket past.
-- De **Automater** vinkt passende vervoerders aan en kiest de pakketgrootte (uit te zetten in zijn voorkeuren).
-  Dit is experimenteel: controleer de advertentie altijd voor je op "Plaats advertentie" klikt.
-- Alle onderdelen delen één kolomlijst voor `producten.xml`; de Scanner past bij "verkocht" alleen dat ene
-  product aan en wist geen velden van andere onderdelen meer.
