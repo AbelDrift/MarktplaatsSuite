@@ -17,7 +17,7 @@ ai = ["transparent-background", "rembg", "opencv-python", "numpy", "tqdm", "psut
 marktplaats-suite = "marktplaats_suite.productmanager:main"
 
 [tool.setuptools]
-packages = ["marktplaats_suite"]
+packages = ["marktplaats_suite", "marktplaats_suite.assets"]
 
 [tool.setuptools.package-data]
 marktplaats_suite = ["assets/*"]
