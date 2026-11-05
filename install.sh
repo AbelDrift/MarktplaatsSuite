@@ -85,6 +85,13 @@ Categories=Utility;Office;
 DESK
 # oude losse starters uit eerdere versies opruimen
 rm -f "$HOME"/.local/share/applications/marktplaats-{productmanager,fotomanager,barcode_scanner,automater_gtk}.desktop
+# menu-items van de oude losse installers (andere bestandsnamen) opruimen op basis van de naam
+for d in "$HOME"/.local/share/applications/*.desktop "$HOME"/Desktop/*.desktop; do
+  [ -f "$d" ] || continue
+  if grep -qE '^Name=Marktplaats (Automat|Barcode|Foto|Product)' "$d"; then
+    echo "   oude starter verwijderd: $d"; rm -f "$d"
+  fi
+done
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
 
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "Tip: voeg ~/.local/bin toe aan je PATH (log opnieuw in).";; esac
