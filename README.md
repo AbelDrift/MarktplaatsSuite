@@ -1,5 +1,7 @@
 # Marktplaats Suite
 
+<p align="center"><img src="marktplaats_suite/assets/icon.png" width="160" alt="Marktplaats Suite logo"></p>
+
 Eén app met alle Marktplaats-tools van HerNieuw, voor **Debian en Ubuntu** (en afgeleiden):
 
 Alles in **één venster** met tabs:
