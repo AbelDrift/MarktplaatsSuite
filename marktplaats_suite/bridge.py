@@ -58,13 +58,12 @@ def whoppah_velden(p, instell):
 def vinted_velden(p, instell):
     """Berekende Vinted-waarden (zelfde regels als de Uploader)."""
     uit = {}
-    w = _getal(p.get("waarde_min"))
-    if w:
-        uit["vinted_prijs"] = max(1, round(w))
-    else:
-        basis = _getal(p.get("vraagprijs"))
-        if basis is not None:
-            uit["vinted_prijs"] = max(1, round(basis * float(instell.get("prijs_terugval_factor", 0.85))))
+    # Vraagprijs eerst, anders de hoogste waardeschatting, anders de laagste
+    for sleutel in ("vraagprijs", "waarde_max", "waarde_min"):
+        w = _getal(p.get(sleutel))
+        if w:
+            uit["vinted_prijs"] = max(1, round(w))
+            break
     h, b, l = (_getal(p.get(k)) for k in ("hoogte", "breedte", "lengte"))
     gew = _getal(p.get("gewicht"))
     if None not in (h, b, l):
