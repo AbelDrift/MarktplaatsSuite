@@ -731,6 +731,13 @@ class MarktplaatsAuto:
                         self.logger.warning(f"   ⚠️ Categorie '{gewenste_cat}' niet in de suggesties, eerste suggestie blijft staan")
                 except Exception as e:
                     self.logger.warning(f"   ⚠️ Categorie kiezen mislukt ({e}), eerste suggestie blijft staan")
+            vraag = getattr(self, "on_controleer_categorie", None)
+            if vraag:
+                self.logger.info("   ⏸️ Wacht op bevestiging van de categorie...")
+                if not vraag(product.get("titel", "")):
+                    self.logger.info("   ⏹️ Gestopt bij categoriecontrole")
+                    self.running = False
+                    return False
             self._klik_verder()
             time.sleep(2)
             self.logger.info(f"   ✅ Titel: {title}")
@@ -900,6 +907,7 @@ class App:
         except Exception:
             pass
         self.auto.on_vraag_logo = self._vraag_logo
+        self.auto.on_controleer_categorie = self._controleer_categorie
         self.running = False
 
         self._setup_ui()
@@ -1281,6 +1289,30 @@ class App:
             resultaat['v'] = ("met" if r == Gtk.ResponseType.YES else
                               "zonder" if r == Gtk.ResponseType.NO else "stop",
                               onthoud.get_active())
+            d.destroy()
+            klaar.set()
+            return False
+
+        GLib.idle_add(toon)
+        klaar.wait()
+        return resultaat['v']
+
+    def _controleer_categorie(self, titel):
+        """Pauze vanuit de werkthread: gebruiker kan de categorie in de browser nog wijzigen."""
+        resultaat = {}
+        klaar = threading.Event()
+
+        def toon():
+            d = Gtk.MessageDialog(parent=self.window.top(), flags=0, message_type=Gtk.MessageType.QUESTION,
+                                  buttons=Gtk.ButtonsType.NONE,
+                                  text=f"Juiste categorie voor '{titel}'?")
+            d.format_secondary_text("Controleer de gekozen categorie in de browser en wijzig die "
+                                    "indien nodig. Klik daarna op 'Ja, verder'.")
+            d.add_button("Ja, verder", Gtk.ResponseType.YES)
+            d.add_button("Stoppen", Gtk.ResponseType.CANCEL)
+            d.set_keep_above(True)
+            d.show_all()
+            resultaat['v'] = d.run() == Gtk.ResponseType.YES
             d.destroy()
             klaar.set()
             return False
