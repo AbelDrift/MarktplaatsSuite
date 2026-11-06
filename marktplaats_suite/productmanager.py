@@ -4538,7 +4538,7 @@ class SettingsTab(Gtk.Box):
 # ============================================
 class MainWindow(Gtk.Window):
     def __init__(self, gebruikersnaam, user_manager):
-        super().__init__(title="Marktplaats Suite")
+        super().__init__(title="SellYourShit")
         self.set_default_size(1100, 850)
         self.set_position(Gtk.WindowPosition.CENTER)
 
@@ -4620,7 +4620,7 @@ class MainWindow(Gtk.Window):
         self.dashboard_tab = DashboardTab(self)
         self.notebook.append_page(self.dashboard_tab, Gtk.Label(label="📈 Sales Dashboard"))
 
-        # Overige onderdelen van de Marktplaats Suite als tabs
+        # Overige onderdelen van SellYourShit als tabs
         self.foto_tab = self._maak_onderdeel_tab("📷 Product Studio", "marktplaats_suite.fotomanager", "MarktplaatsApp")
         self.scanner_tab = self._maak_onderdeel_tab("🔍 Product Scanner", "marktplaats_suite.scanner", "MainWindow")
         self.automater_app = None

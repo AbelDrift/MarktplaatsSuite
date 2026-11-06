@@ -1,8 +1,8 @@
-# Marktplaats Suite
+# SellYourShit
 
-<p align="center"><img src="marktplaats_suite/assets/icon.png" width="160" alt="Marktplaats Suite logo"></p>
+<p align="center"><img src="marktplaats_suite/assets/icon.png" width="160" alt="SellYourShit logo"></p>
 
-Eén app met alle Marktplaats-tools van HerNieuw, voor **Debian en Ubuntu** (en afgeleiden):
+**SellYourShit** is één app met alle Marktplaats-tools van HerNieuw, voor **Debian en Ubuntu** (en afgeleiden):
 
 Alles in **één venster** met tabs:
 
@@ -13,7 +13,7 @@ Alles in **één venster** met tabs:
 | 🔍 Product Scanner | MarktplaatsScanner | USB-barcodescanner met productinfo en foto |
 | 🤖 Product Uploader | MarktplaatsAutomater | Advertenties automatisch plaatsen, nu alleen voor Marktplaats (Selenium + Chrome/Chromium) |
 
-Start met `marktplaats-suite` of via het applicatiemenu.
+Start met `sellyourshit` (of `marktplaats-suite`) of via het applicatiemenu.
 
 **Centrale instellingen** (⚙️ rechtsboven): het XML-bestand wordt maar op één plek ingesteld en geldt voor alle tabs.
 Algemene voorwaarden bewerk je in een eigen tekstvak met vet/schuin (knoppen of Ctrl+B / Ctrl+I), met import

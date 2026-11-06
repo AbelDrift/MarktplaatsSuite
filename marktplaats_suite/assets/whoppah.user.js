@@ -2,7 +2,7 @@
 // @name         Marktplaats Suite → Whoppah
 // @namespace    marktplaats-suite
 // @version      1.0
-// @description  Vult de Whoppah-stappen (details, maten, prijs, verzending) in met gegevens uit de Marktplaats Suite. Foto's voeg je zelf toe.
+// @description  Vult de Whoppah-stappen (details, maten, prijs, verzending) in met gegevens uit SellYourShit. Foto's voeg je zelf toe.
 // @match        https://www.whoppah.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
@@ -33,7 +33,7 @@
     'color:#e8eef3;font:12px/1.4 system-ui,sans-serif;border-radius:10px;box-shadow:0 4px 18px #0006;padding:10px;';
   paneel.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <b>Marktplaats Suite</b><span id="msw-min" style="cursor:pointer;padding:0 4px">–</span></div>
+      <b>SellYourShit</b><span id="msw-min" style="cursor:pointer;padding:0 4px">–</span></div>
     <div id="msw-body">
       <div style="display:flex;gap:4px"><select id="msw-sel" style="flex:1;min-width:0;color:#000"></select>
         <button id="msw-ver" title="Producten opnieuw ophalen">↻</button></div>

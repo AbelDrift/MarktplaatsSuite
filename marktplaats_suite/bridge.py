@@ -151,7 +151,7 @@ def start(config):
                         return self._stuur(200, f.read(), "text/javascript; charset=utf-8")
                 except OSError:
                     return self._stuur(404, "niet gevonden", "text/plain")
-            self._stuur(200, "Marktplaats Suite brug", "text/plain")
+            self._stuur(200, "SellYourShit brug", "text/plain")
 
     try:
         _server = ThreadingHTTPServer(("127.0.0.1", POORT), H)

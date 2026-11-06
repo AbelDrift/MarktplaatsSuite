@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Marktplaats Suite - installatie voor Debian (11+) en Ubuntu (20.04+) en afgeleiden.
+# SellYourShit - installatie voor Debian (11+) en Ubuntu (20.04+) en afgeleiden.
 # Gebruik:  ./install.sh [--met-ai] [--met-chrome]
 #   --met-ai      ook AI-achtergrondverwijdering (transparent-background, rembg, opencv; groot!)
 #   --met-chrome  Google Chrome installeren (alleen amd64) voor de Automater
@@ -53,12 +53,13 @@ export GDK_BACKEND="\${GDK_BACKEND:-x11}"
 exec "$VENV/bin/python" -m marktplaats_suite "\$@"
 LAUNCH
 chmod +x "$HOME/.local/bin/marktplaats-suite"
+ln -sf "$HOME/.local/bin/marktplaats-suite" "$HOME/.local/bin/sellyourshit"
 
 cat > "$HOME/.local/share/applications/marktplaats-suite.desktop" <<DESK
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Marktplaats Suite
+Name=SellYourShit
 Comment=Producten, foto's, scanner en automater in één venster
 Exec=$HOME/.local/bin/marktplaats-suite
 Icon=$PREFIX/icon.png
@@ -97,5 +98,5 @@ if [ "$MET_CHROME" -eq 1 ]; then
 fi
 
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "Tip: voeg ~/.local/bin toe aan je PATH (log opnieuw in).";; esac
-echo "==> Klaar. Start 'Marktplaats Suite' vanuit het menu, of: marktplaats-suite"
+echo "==> Klaar. Start 'SellYourShit' vanuit het menu, of: sellyourshit"
 echo "    Gegevens staan in: $PREFIX"
