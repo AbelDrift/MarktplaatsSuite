@@ -8,7 +8,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, GdkPixbuf
 import os
-from marktplaats_suite.common import data_dir, asset, shared_get, shared_set, is_shared_key
+from marktplaats_suite.common import open_extern, data_dir, asset, shared_get, shared_set, is_shared_key
 import sys
 import json
 import hashlib
@@ -3009,7 +3009,7 @@ class OverzichtTab(Gtk.Box):
         """Open een URL in de standaard webbrowser."""
         if url:
             try:
-                subprocess.Popen(["xdg-open", url])
+                open_extern(url)
             except Exception as e:
                 self._toon_foutdialoog(f"Kon URL niet openen: {e}")
         else:
@@ -3028,7 +3028,7 @@ class OverzichtTab(Gtk.Box):
                 url = product.get(url_key, "").strip()
                 if url:
                     try:
-                        subprocess.Popen(["xdg-open", url])
+                        open_extern(url)
                         return
                     except Exception as e:
                         self._toon_foutdialoog(f"Kon URL niet openen: {e}")
@@ -3049,7 +3049,7 @@ class OverzichtTab(Gtk.Box):
             pad = vind_product_map(artikelnummer, self.config)
             if os.path.isdir(pad):
                 try:
-                    subprocess.Popen(["xdg-open", pad])
+                    open_extern(pad)
                 except Exception as e:
                     self._toon_foutdialoog(f"Kon map niet openen: {e}")
             else:
@@ -3058,7 +3058,7 @@ class OverzichtTab(Gtk.Box):
                     opgeslagen = product.get("folder_locatie", "")
                     if opgeslagen and os.path.isdir(opgeslagen):
                         try:
-                            subprocess.Popen(["xdg-open", opgeslagen])
+                            open_extern(opgeslagen)
                         except Exception as e:
                             self._toon_foutdialoog(f"Kon map niet openen: {e}")
                         continue
@@ -3107,12 +3107,12 @@ class OverzichtTab(Gtk.Box):
                                 subprocess.Popen(["gthumb", fotos[0]])
                             except FileNotFoundError:
                                 try:
-                                    subprocess.Popen(["xdg-open", fotos[0]])
+                                    open_extern(fotos[0])
                                 except Exception as e:
                                     self._toon_foutdialoog(f"Kon foto niet openen: {e}")
                 else:
                     try:
-                        subprocess.Popen(["xdg-open", originelen_pad])
+                        open_extern(originelen_pad)
                     except Exception as e:
                         self._toon_foutdialoog(f"Geen foto's gevonden en kon map niet openen: {e}")
             else:
@@ -3134,12 +3134,12 @@ class OverzichtTab(Gtk.Box):
                                     subprocess.Popen(["gthumb", fotos[0]])
                                 except FileNotFoundError:
                                     try:
-                                        subprocess.Popen(["xdg-open", fotos[0]])
+                                        open_extern(fotos[0])
                                     except Exception as e:
                                         self._toon_foutdialoog(f"Kon foto niet openen: {e}")
                     else:
                         try:
-                            subprocess.Popen(["xdg-open", pad])
+                            open_extern(pad)
                         except Exception as e:
                             self._toon_foutdialoog(f"Geen foto's gevonden en kon map niet openen: {e}")
                 else:

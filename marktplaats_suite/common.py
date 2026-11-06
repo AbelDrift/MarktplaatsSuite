@@ -185,3 +185,23 @@ def run_standalone(tab_factory, titel, breedte=900, hoogte=700):
     win.connect("destroy", Gtk.main_quit)
     win.show_all()
     Gtk.main()
+
+
+def open_extern(pad):
+    """Open een map/bestand/URL met het standaardprogramma van de gebruiker.
+
+    De Qt-/venv-variabelen van de app (o.a. door OpenCV) worden eruit gehaald;
+    anders kan KDE's Dolphin of een andere Qt-app niet starten.
+    """
+    import os, subprocess
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith("QT_") and k not in ("LD_LIBRARY_PATH", "PYTHONHOME", "PYTHONPATH")}
+    laatste = None
+    for cmd in (["xdg-open", pad], ["gio", "open", pad]):
+        try:
+            subprocess.Popen(cmd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+            return
+        except FileNotFoundError as e:
+            laatste = e
+    raise laatste or OSError("xdg-open niet gevonden")

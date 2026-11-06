@@ -16,7 +16,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, GdkPixbuf, Pango
 import os
-from marktplaats_suite.common import data_dir, asset, get_xml_path, TabBasis, run_standalone
+from marktplaats_suite.common import open_extern, data_dir, asset, get_xml_path, TabBasis, run_standalone
 import sys
 import json
 import subprocess
@@ -722,7 +722,7 @@ class MainWindow(TabBasis):
 
     def _open_folder(self, folder):
         try:
-            subprocess.Popen(["xdg-open", folder])
+            open_extern(folder)
         except Exception as e:
             self.status_label.set_markup(f"<span foreground='red'>❌ Kon map niet openen: {e}</span>")
 

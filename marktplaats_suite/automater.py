@@ -6,7 +6,7 @@ Alle instellingen binnen de GUI
 
 import os
 import shutil
-from marktplaats_suite.common import data_dir, asset, get_xml_path, TabBasis, run_standalone
+from marktplaats_suite.common import open_extern, data_dir, asset, get_xml_path, TabBasis, run_standalone
 import sys
 import time
 import threading
