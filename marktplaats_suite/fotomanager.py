@@ -31,6 +31,54 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
+AFBEELDING_EXTENSIES = ('.jpg', '.jpeg', '.png')
+
+
+def pak_zips_uit(zip_paden, doelmap):
+    """Haalt alle foto's uit de opgegeven zip-bestanden zonder dat de gebruiker iets hoeft uit te pakken.
+
+    Geeft (lijst_met_foto_paden, lijst_met_meldingen). De foto's komen plat in `doelmap`;
+    bij dubbele bestandsnamen (bijv. IMG_001.jpg in twee zips) wordt het zip-nummer voor de
+    naam gezet zodat niets wordt overschreven. Alleen de bestandsnaam wordt gebruikt (veilig
+    tegen paden als ../ in een zip), verborgen/mac-metadata wordt overgeslagen.
+    """
+    import zipfile
+    shutil.rmtree(doelmap, ignore_errors=True)
+    os.makedirs(doelmap, exist_ok=True)
+    paden, meldingen, gebruikt = [], [], set()
+    for zip_pad in sorted(zip_paden):
+        try:
+            with zipfile.ZipFile(zip_pad) as z:
+                aantal = 0
+                for info in sorted(z.infolist(), key=lambda i: i.filename):
+                    if info.is_dir():
+                        continue
+                    naam = os.path.basename(info.filename)
+                    if (not naam or naam.startswith('.') or '__MACOSX' in info.filename
+                            or not naam.lower().endswith(AFBEELDING_EXTENSIES)):
+                        continue
+                    doel_naam = naam
+                    if doel_naam.lower() in gebruikt:
+                        stam, ext = os.path.splitext(naam)
+                        doel_naam = f"{os.path.splitext(os.path.basename(zip_pad))[0]}_{stam}{ext}"
+                        teller = 2
+                        while doel_naam.lower() in gebruikt:
+                            doel_naam = f"{os.path.splitext(os.path.basename(zip_pad))[0]}_{stam}_{teller}{ext}"
+                            teller += 1
+                    gebruikt.add(doel_naam.lower())
+                    doel = os.path.join(doelmap, doel_naam)
+                    with z.open(info) as bron, open(doel, 'wb') as uit:
+                        shutil.copyfileobj(bron, uit)
+                    paden.append(doel)
+                    aantal += 1
+                meldingen.append(f"📦 {os.path.basename(zip_pad)}: {aantal} foto's uitgepakt")
+        except zipfile.BadZipFile:
+            meldingen.append(f"⚠️ {os.path.basename(zip_pad)} is geen geldige zip, overgeslagen")
+        except Exception as e:
+            meldingen.append(f"⚠️ {os.path.basename(zip_pad)}: {e}")
+    return paden, meldingen
+
+
 def run_safe_command(cmd, timeout=300):
     try:
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
@@ -863,9 +911,13 @@ class MarktplaatsApp(TabBasis):
         self.src_entry.connect("changed", self.on_src_changed)
         src_btn = Gtk.Button(label="Bladeren")
         src_btn.connect("clicked", self.browse_source)
+        zip_btn = Gtk.Button(label="📦 Zip kiezen")
+        zip_btn.set_tooltip_text("Kies een of meer zip-bestanden: alle foto's erin worden gebruikt, uitpakken is niet nodig")
+        zip_btn.connect("clicked", self.browse_zips)
         map_box.pack_start(map_label, False, False, 0)
         map_box.pack_start(self.src_entry, True, True, 0)
         map_box.pack_start(src_btn, False, False, 0)
+        map_box.pack_start(zip_btn, False, False, 0)
 
         files_box = Gtk.Box(spacing=10)
         source_box.pack_start(files_box, False, False, 5)
@@ -1093,11 +1145,37 @@ class MarktplaatsApp(TabBasis):
 
         if is_map:
             self.config['source_type'] = 'map'
-            self.files_count_label.set_markup("<small>Bronmap modus (alle bestanden in map worden gebruikt)</small>")
+            self.files_count_label.set_markup("<small>Bronmap modus (alle foto's en zip-bestanden in de map worden gebruikt)</small>")
         else:
             self.config['source_type'] = 'files'
             count = len(self.files_list)
             self.files_count_label.set_markup(f"<small>{count} bestanden geselecteerd</small>")
+
+    def voeg_zips_toe(self, paden):
+        """Zet zip-bestanden in de lijst met losse bestanden en schakelt over naar die modus."""
+        nieuw = 0
+        for pad in paden:
+            if not any(row[1] == pad for row in self.files_list):
+                self.files_list.append([os.path.basename(pad), pad])
+                nieuw += 1
+        self.source_type_files.set_active(True)
+        self.files_count_label.set_markup(f"<small>{len(self.files_list)} bestanden geselecteerd</small>")
+        self.log_message(f"{nieuw} zip-bestand(en) toegevoegd (foto's worden bij het verwerken uitgepakt)")
+
+    def browse_zips(self, widget):
+        dialog = Gtk.FileChooserDialog(title="Selecteer zip-bestand(en)", parent=self.top(),
+                                       action=Gtk.FileChooserAction.OPEN)
+        dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK)
+        dialog.set_select_multiple(True)
+        filt = Gtk.FileFilter()
+        filt.set_name("Zip-bestanden (*.zip)")
+        filt.add_pattern("*.zip")
+        filt.add_pattern("*.ZIP")
+        dialog.add_filter(filt)
+        dialog.set_current_folder(os.path.expanduser("~/Downloads"))
+        if dialog.run() == Gtk.ResponseType.OK:
+            self.voeg_zips_toe(dialog.get_filenames())
+        dialog.destroy()
 
     def browse_files_with_icons(self, widget):
         chooser = CustomFileChooser(self.top(), "Selecteer foto's (grote pictogrammen)", select_multiple=True, start_folder=os.path.expanduser("~/Downloads"))
@@ -1137,16 +1215,37 @@ class MarktplaatsApp(TabBasis):
         self.log_message("Bestandenlijst geleegd")
 
     def get_source_files(self):
+        """Foto's uit de bronmap of de losse bestanden. Zip-bestanden worden automatisch
+        uitgepakt (in een tijdelijke map) en hun foto's doen mee."""
         if self.source_type_map.get_active():
             source_dir = self.config.get('source_dir', '')
-            if source_dir and os.path.exists(source_dir):
-                image_files = []
-                for ext in ['*.jpg', '*.JPG', '*.jpeg', '*.JPEG', '*.png', '*.PNG']:
-                    image_files.extend(glob.glob(os.path.join(source_dir, ext)))
-                return image_files
-            return []
+            if not (source_dir and os.path.exists(source_dir)):
+                return []
+            image_files, zips = [], []
+            if os.path.isfile(source_dir):
+                # er staat direct een zip-bestand (of foto) in het bronmap-veld
+                if source_dir.lower().endswith('.zip'):
+                    zips.append(source_dir)
+                elif source_dir.lower().endswith(AFBEELDING_EXTENSIES):
+                    image_files.append(source_dir)
+            for naam in (sorted(os.listdir(source_dir)) if os.path.isdir(source_dir) else []):
+                pad = os.path.join(source_dir, naam)
+                if not os.path.isfile(pad) or naam.startswith('.'):
+                    continue
+                if naam.lower().endswith(AFBEELDING_EXTENSIES):
+                    image_files.append(pad)
+                elif naam.lower().endswith('.zip'):
+                    zips.append(pad)
         else:
-            return [row[1] for row in self.files_list if os.path.exists(row[1])]
+            bestanden = [row[1] for row in self.files_list if os.path.exists(row[1])]
+            zips = [b for b in bestanden if b.lower().endswith('.zip')]
+            image_files = [b for b in bestanden if not b.lower().endswith('.zip')]
+        if zips:
+            uit_paden, meldingen = pak_zips_uit(zips, os.path.join(data_dir(), "zip_uitgepakt"))
+            for m in meldingen:
+                self.log_message(m)
+            image_files.extend(uit_paden)
+        return image_files
 
     def check_installed_tools(self):
         tools_status = []
@@ -1489,7 +1588,16 @@ class MarktplaatsApp(TabBasis):
             for img in batch:
                 shutil.copy2(img, os.path.join(temp_dir, os.path.basename(img)))
 
-            cmd = ["transparent-background", "--source", temp_dir, "--dest", output_dir,
+            # Het commando staat in de venv, niet per se op het PATH van de starter.
+            tb_script = os.path.join(os.path.dirname(sys.executable), "transparent-background")
+            if os.path.isfile(tb_script):
+                basis_cmd = [tb_script]
+            elif shutil.which("transparent-background"):
+                basis_cmd = ["transparent-background"]
+            else:
+                basis_cmd = [sys.executable, "-c",
+                             "from transparent_background.Remover import console; console()"]
+            cmd = basis_cmd + ["--source", temp_dir, "--dest", output_dir,
                    "--type", "rgba", "--mode", "base", "--device", "cpu", "--format", "png"]
 
             success, output = run_safe_command(cmd, timeout=600)

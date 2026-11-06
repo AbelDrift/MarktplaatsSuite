@@ -115,50 +115,7 @@ def lees_algemene_voorwaarden_bestand(pad):
 # ============================================
 # KOLOMSTRUCTUUR (gedeeld met auto_marktplaats.py)
 # ============================================
-COLUMNS = [
-    "artikelnummer",      # A (0)
-    "titel",               # B (1)
-    "categorie",            # C (2)
-    "omschrijving",          # D (3)
-    "online",                 # E (4)
-    "lengte",                  # F (5)
-    "breedte",                  # G (6)
-    "hoogte",                     # H (7)
-    "gewicht",                     # I (8)
-    "conditie",                     # J (9)
-    "staat_details",                 # K (10)
-    "waarde_min",                     # L (11)
-    "waarde_max",                      # M (12)
-    "vraagprijs",                       # N (13)
-    "aanmaakdatum",                      # O (14)
-    "aanmaaktijd",                       # P (15)
-    "tijdsperiode",                       # Q (16)
-    "opslaglocatie",                       # R (17)
-    "sublocatie",                           # S (18)
-    "rij",                                   # T (19)
-    "folder_locatie",                         # U (20)
-    "verkocht",                                 # V (21)
-    "verkoopprijs",                              # W (22)
-    "verkoopdatum",                               # X (23)
-    "algemene_voorwaarden",                        # Y (24)
-    "url_1",                                       # Z (25)
-    "url_2",                                       # AA (26)
-    "url_3",                                       # AB (27)
-    "url_4",                                       # AC (28)
-    "url_5",                                       # AD (29)
-    "leverwijze",                                   # AE (30)
-    "klant_naam",                                   # AF (31)
-    "klant_telefoon",                               # AG (32)
-    "klant_email",                                   # AH (33)
-    "ophaal_afspraak",                               # AI (34)
-    "track_trace",                                   # AJ (35)
-    "verwerkt_door",                                 # AK (36)
-    "toegewezen_aan",                                # AL (37)
-    "gereserveerd",                                  # AM (38)
-    "reserveprijs",                                  # AN (39)
-    "reserveerdatum",                                # AO (40)
-    "reservering_klant_naam",                        # AP (41)
-]
+from marktplaats_suite.common import COLUMNS
 COL = {name: idx for idx, name in enumerate(COLUMNS)}
 
 # ============================================
@@ -195,6 +152,16 @@ KOLOM_LABELS = {
     "url_3": "URL 3",
     "url_4": "URL 4",
     "url_5": "URL 5",
+    "marktplaats_categorie": "Marktplaats-categorie",
+    "merk": "Merk",
+    "materiaal": "Materiaal",
+    "stijl": "Stijl",
+    "kleur": "Kleur",
+    "extra_info_koper": "Extra info voor koper",
+    "kanalen": "Verkoopkanalen",
+    "online_whoppah": "Online op Whoppah",
+    "vinted_categorie": "Vinted-categorie",
+    "online_vinted": "Online op Vinted",
     "leverwijze": "Leverwijze",
     "klant_naam": "Klant naam",
     "klant_telefoon": "Klant telefoon",
@@ -305,6 +272,7 @@ DEFAULT_SNELTOETSEN = {
     "ongedaan_maken": ["<Control>z"],
     "weer_gedaan_maken": ["<Control><Alt>z"],
     "online_markeren": ["<Control>o"],
+    "offline_markeren": ["<Control><Shift>o"],
     "bewerken": ["<Control>b"],
     "zoeken": ["<Control>f"],
     "toewijzen": ["<Control>t"],
@@ -1793,6 +1761,12 @@ def _laad_tutorial_css():
         print(f"⚠️ Kon tutorial-CSS niet laden: {e}")
 
 
+def _lijkt_op_gemini(tekst):
+    """Een Gemini-antwoord heeft een eigen regel 'Details:' of een regel 'Geschatte waarde ...'."""
+    import re
+    return bool(re.search(r"(?im)^\s*details\s*:\s*$", tekst) or re.search(r"(?im)^\s*geschatte\s+waarde", tekst))
+
+
 class RegistreerTab(Gtk.Box):
     # Volgorde en inhoud van de overlay-tutorial. Elke stap wijst naar een
     # widget die al bestaat in het (ongewijzigde) formulier hieronder.
@@ -1871,6 +1845,47 @@ class RegistreerTab(Gtk.Box):
         cat_row.pack_start(tp_col, True, True, 0)
         form.pack_start(cat_row, False, False, 0)
 
+        # Categorie op Marktplaats (bepaalt welke kenmerken en verzendopties Marktplaats toont)
+        mp_col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        mp_col.pack_start(self._label("Marktplaats-categorie (optioneel; de Automater kiest deze, anders de eerste suggestie)"), False, False, 0)
+        self.mp_categorie_entry = Gtk.Entry()
+        self.mp_categorie_entry.set_placeholder_text("bijv. Krukjes, Lampen | Losse lampen, Overige meubels")
+        mp_col.pack_start(self.mp_categorie_entry, False, False, 0)
+        form.pack_start(mp_col, False, False, 0)
+
+        # Categorie op Vinted
+        vt_col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        vt_col.pack_start(self._label("Vinted-categorie (optioneel; leeg = eerste suggestie van Vinted)"), False, False, 0)
+        self.vinted_categorie_entry = Gtk.Entry()
+        self.vinted_categorie_entry.set_placeholder_text("bijv. Salontafels  of  Home > Meubilair > Salontafels")
+        vt_col.pack_start(self.vinted_categorie_entry, False, False, 0)
+        form.pack_start(vt_col, False, False, 0)
+
+        # Kenmerken (Whoppah en Marktplaats vragen hier allebei om)
+        form.pack_start(self._label("Kenmerken (optioneel; Whoppah gebruikt deze in plaats van de gok van hun AI)"), False, False, 0)
+        kenm_row = Gtk.Box(spacing=5)
+        self.merk_entry = self._number_entry("Merk")
+        self.materiaal_entry = self._number_entry("Materiaal")
+        self.stijl_entry = self._number_entry("Stijl")
+        self.kleur_entry = self._number_entry("Kleur")
+        for e in (self.merk_entry, self.materiaal_entry, self.stijl_entry, self.kleur_entry):
+            kenm_row.pack_start(e, True, True, 0)
+        form.pack_start(kenm_row, False, False, 0)
+        self.extra_info_entry = Gtk.Entry()
+        self.extra_info_entry.set_placeholder_text("Extra info voor de koper (bijv. 'Zelf ontworpen', 'gekocht in 2016')")
+        form.pack_start(self.extra_info_entry, False, False, 0)
+
+        # Verkoopkanalen
+        form.pack_start(self._label("Plaatsen op"), False, False, 0)
+        kanalen_row = Gtk.Box(spacing=15)
+        self.kanaal_marktplaats_check = Gtk.CheckButton(label="Marktplaats")
+        self.kanaal_marktplaats_check.set_active(True)
+        self.kanaal_whoppah_check = Gtk.CheckButton(label="Whoppah")
+        self.kanaal_vinted_check = Gtk.CheckButton(label="Vinted")
+        for c in (self.kanaal_marktplaats_check, self.kanaal_whoppah_check, self.kanaal_vinted_check):
+            kanalen_row.pack_start(c, False, False, 0)
+        form.pack_start(kanalen_row, False, False, 0)
+
         # Conditie
         form.pack_start(self._label("Staat van het artikel"), False, False, 0)
         self.conditie_combo = Gtk.ComboBoxText()
@@ -1896,6 +1911,15 @@ class RegistreerTab(Gtk.Box):
         for e in (self.lengte_entry, self.breedte_entry, self.hoogte_entry, self.gewicht_entry):
             dim_row.pack_start(e, True, True, 0)
         form.pack_start(dim_row, False, False, 0)
+
+        self.verzendadvies_label = Gtk.Label()
+        self.verzendadvies_label.set_xalign(0)
+        self.verzendadvies_label.set_line_wrap(True)
+        self.verzendadvies_label.set_no_show_all(True)
+        form.pack_start(self.verzendadvies_label, False, False, 0)
+        for e in (self.lengte_entry, self.breedte_entry, self.hoogte_entry, self.gewicht_entry,
+                  self.mp_categorie_entry):
+            e.connect("changed", self._update_verzendadvies)
 
         # Waarde & vraagprijs
         form.pack_start(self._label("Geschatte waarde en vraagprijs (€)"), False, False, 0)
@@ -1976,6 +2000,11 @@ class RegistreerTab(Gtk.Box):
         self.tutorial_toggle_btn.get_style_context().add_class("tutorial-toggle-btn")
         self.tutorial_toggle_btn.connect("clicked", self._on_tutorial_toggle)
         top_row.pack_end(self.tutorial_toggle_btn, False, False, 8)
+
+        self.gemini_btn = Gtk.Button(label="📋 Plak Gemini-tekst")
+        self.gemini_btn.set_tooltip_text("Vult titel, omschrijving, kenmerken en waarde in uit een Gemini-antwoord")
+        self.gemini_btn.connect("clicked", self._on_gemini_plakken)
+        top_row.pack_start(self.gemini_btn, False, False, 8)
 
         # --- Tutorial: stappen (wijzen naar de widgets hierboven, ongewijzigd formulier) ---
         self.tutorial_stappen = [
@@ -2214,9 +2243,85 @@ class RegistreerTab(Gtk.Box):
         entry.set_placeholder_text(placeholder)
         return entry
 
+    def _update_verzendadvies(self, *_):
+        from marktplaats_suite.verzending import advies_tekst
+        try:
+            tekst = advies_tekst(self.lengte_entry.get_text(), self.breedte_entry.get_text(),
+                                 self.hoogte_entry.get_text(), self.gewicht_entry.get_text(),
+                                 self.mp_categorie_entry.get_text())
+        except Exception as e:  # advies mag het formulier nooit blokkeren
+            tekst = ""
+            print(f"Verzendadvies fout: {e}")
+        self.verzendadvies_label.set_text(tekst)
+        if tekst:
+            self.verzendadvies_label.show()
+        else:
+            self.verzendadvies_label.hide()
+
     def _on_titel_changed(self, widget):
         length = len(widget.get_text())
         self.titel_counter.set_text(f"{length}/{MAX_TITEL_LENGTE}")
+
+    def _on_gemini_plakken(self, widget):
+        from marktplaats_suite.gemini_import import parse
+        dialog = Gtk.Dialog(title="Gemini-tekst plakken", parent=self.main_window, flags=0)
+        dialog.add_buttons("Annuleren", Gtk.ResponseType.CANCEL, "Invullen", Gtk.ResponseType.OK)
+        dialog.set_default_size(700, 480)
+        box = dialog.get_content_area()
+        box.set_border_width(10)
+        box.set_spacing(8)
+        uitleg = Gtk.Label(label="Plak hier het antwoord van Gemini (titel, omschrijving, 'Details:' en 'Geschatte waarde').\n"
+                                 "Alleen velden die in de tekst staan worden ingevuld; de rest blijft zoals het is.")
+        uitleg.set_xalign(0)
+        box.pack_start(uitleg, False, False, 0)
+        sw = Gtk.ScrolledWindow()
+        sw.set_vexpand(True)
+        tv = Gtk.TextView()
+        tv.set_wrap_mode(Gtk.WrapMode.WORD)
+        sw.add(tv)
+        box.pack_start(sw, True, True, 0)
+        try:
+            klem = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).wait_for_text()
+            if klem and _lijkt_op_gemini(klem):
+                tv.get_buffer().set_text(klem)
+        except Exception:
+            pass
+        dialog.show_all()
+        tv.grab_focus()
+        antwoord = dialog.run()
+        buf = tv.get_buffer()
+        tekst = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), True)
+        dialog.destroy()
+        if antwoord != Gtk.ResponseType.OK or not tekst.strip():
+            return
+
+        if not _lijkt_op_gemini(tekst):
+            self._toon_foutdialoog("Dit lijkt geen Gemini-antwoord: er staat geen regel 'Details:' én geen "
+                                   "'Geschatte waarde' in. Er is niets ingevuld.")
+            return
+        velden, meld = parse(tekst)
+        ingevuld = []
+        if "titel" in velden:
+            self.titel_entry.set_text(velden["titel"]); ingevuld.append("titel")
+        if velden.get("omschrijving"):
+            self.omschrijving_view.get_buffer().set_text(velden["omschrijving"]); ingevuld.append("omschrijving")
+        for naam, entry in (("merk", self.merk_entry), ("materiaal", self.materiaal_entry),
+                            ("stijl", self.stijl_entry), ("kleur", self.kleur_entry),
+                            ("lengte", self.lengte_entry), ("breedte", self.breedte_entry),
+                            ("hoogte", self.hoogte_entry), ("gewicht", self.gewicht_entry),
+                            ("waarde_min", self.waarde_min_entry), ("waarde_max", self.waarde_max_entry)):
+            if velden.get(naam):
+                entry.set_text(velden[naam]); ingevuld.append(naam.replace("_", " "))
+        if velden.get("tijdsperiode"):
+            self.tijdsperiode_combo.get_child().set_text(velden["tijdsperiode"]); ingevuld.append("tijdsperiode")
+        if velden.get("conditie") in CONDITIES:
+            self.conditie_combo.set_active(CONDITIES.index(velden["conditie"])); ingevuld.append("staat")
+
+        tekst_uit = "Ingevuld: " + (", ".join(ingevuld) if ingevuld else "niets")
+        if meld:
+            tekst_uit += "\n\nLet op:\n- " + "\n- ".join(meld)
+        tekst_uit += "\n\nControleer nog: categorie, afmetingen/gewicht en vraagprijs."
+        self._toon_info_dialoog(tekst_uit, "Gemini-tekst ingevuld")
 
     def _on_conditie_changed(self, widget):
         for child in self.condition_details_container.get_children():
@@ -2242,6 +2347,14 @@ class RegistreerTab(Gtk.Box):
         self.titel_entry.set_text("")
         self.omschrijving_view.get_buffer().set_text("")
         self.categorie_combo.get_child().set_text("")
+        self.mp_categorie_entry.set_text("")
+        for e in (self.merk_entry, self.materiaal_entry, self.stijl_entry, self.kleur_entry):
+            e.set_text("")
+        self.extra_info_entry.set_text("")
+        self.kanaal_marktplaats_check.set_active(True)
+        self.kanaal_whoppah_check.set_active(False)
+        self.kanaal_vinted_check.set_active(False)
+        self.vinted_categorie_entry.set_text("")
         self.tijdsperiode_combo.get_child().set_text("")
         self.conditie_combo.set_active(0)
         self.staat_details_extra_entry.set_text("")
@@ -2292,6 +2405,16 @@ class RegistreerTab(Gtk.Box):
             "artikelnummer": artikelnummer,
             "titel": titel,
             "categorie": self.categorie_combo.get_active_text() or "",
+            "marktplaats_categorie": self.mp_categorie_entry.get_text().strip(),
+            "merk": self.merk_entry.get_text().strip(),
+            "materiaal": self.materiaal_entry.get_text().strip(),
+            "stijl": self.stijl_entry.get_text().strip(),
+            "kleur": self.kleur_entry.get_text().strip(),
+            "extra_info_koper": self.extra_info_entry.get_text().strip(),
+            "kanalen": ",".join(k for k, c in (("marktplaats", self.kanaal_marktplaats_check),
+                                               ("whoppah", self.kanaal_whoppah_check),
+                                               ("vinted", self.kanaal_vinted_check)) if c.get_active()),
+            "vinted_categorie": self.vinted_categorie_entry.get_text().strip(),
             "omschrijving": omschrijving,
             "lengte": self.lengte_entry.get_text().strip(),
             "breedte": self.breedte_entry.get_text().strip(),
@@ -2784,6 +2907,10 @@ class OverzichtTab(Gtk.Box):
         item_online = Gtk.MenuItem(label="🌐 Markeer als online")
         item_online.connect("activate", lambda w: self._on_markeer_online(None))
         self.context_menu.append(item_online)
+
+        item_offline = Gtk.MenuItem(label="📴 Markeer als offline")
+        item_offline.connect("activate", lambda w: self._on_markeer_offline(None))
+        self.context_menu.append(item_offline)
 
         item_verkocht = Gtk.MenuItem(label="💰 Markeer als verkocht")
         item_verkocht.connect("activate", lambda w: self._on_markeer_verkocht(None))
@@ -4422,6 +4549,11 @@ class MainWindow(Gtk.Window):
             except Exception:
                 pass
 
+        try:
+            from marktplaats_suite.verzending import sla_standaard_op_als_nodig
+            sla_standaard_op_als_nodig()  # maakt verzendtabel.json aan, zodat je die kunt aanpassen
+        except Exception as e:
+            print(f"Verzendtabel niet aangemaakt: {e}")
         self.config = ConfigManager()
         self.gebruikersnaam = gebruikersnaam
         self.user_manager = user_manager
@@ -4479,25 +4611,25 @@ class MainWindow(Gtk.Window):
         vbox.pack_start(self.notebook, True, True, 0)
 
         self.registreer_tab = RegistreerTab(self)
-        self.notebook.append_page(self.registreer_tab, Gtk.Label(label="📝 Registreren"))
+        self.notebook.append_page(self.registreer_tab, Gtk.Label(label="📝 Nieuw Product"))
 
         self.overzicht_tab = OverzichtTab(self)
-        self.notebook.append_page(self.overzicht_tab, Gtk.Label(label="📊 Overzicht"))
+        self.notebook.append_page(self.overzicht_tab, Gtk.Label(label="📊 Product Management"))
 
         # Dashboard als tab (direct laden, geen placeholder)
         self.dashboard_tab = DashboardTab(self)
-        self.notebook.append_page(self.dashboard_tab, Gtk.Label(label="📈 Dashboard"))
+        self.notebook.append_page(self.dashboard_tab, Gtk.Label(label="📈 Sales Dashboard"))
 
         # Overige onderdelen van de Marktplaats Suite als tabs
-        self.foto_tab = self._maak_onderdeel_tab("📷 Foto's", "marktplaats_suite.fotomanager", "MarktplaatsApp")
-        self.scanner_tab = self._maak_onderdeel_tab("🔍 Scanner", "marktplaats_suite.scanner", "MainWindow")
+        self.foto_tab = self._maak_onderdeel_tab("📷 Product Studio", "marktplaats_suite.fotomanager", "MarktplaatsApp")
+        self.scanner_tab = self._maak_onderdeel_tab("🔍 Product Scanner", "marktplaats_suite.scanner", "MainWindow")
         self.automater_app = None
         try:
             from marktplaats_suite.automater import App as AutomaterApp
             self.automater_app = AutomaterApp()
-            self.notebook.append_page(self.automater_app.window, Gtk.Label(label="🤖 Automater"))
+            self.notebook.append_page(self.automater_app.window, Gtk.Label(label="🤖 Product Uploader"))
         except (Exception, SystemExit) as e:
-            self._voeg_foutmelding_tab_toe("🤖 Automater", e)
+            self._voeg_foutmelding_tab_toe("🤖 Product Uploader", e)
         self.connect("delete-event", self._on_delete_event)
         self.connect("destroy", lambda *_: self.automater_app and self.automater_app.sluit())
 
@@ -4515,6 +4647,7 @@ class MainWindow(Gtk.Window):
         self._bind_sneltoets(accel_group, "ongedaan_maken", self.overzicht_tab.undo)
         self._bind_sneltoets(accel_group, "weer_gedaan_maken", self.overzicht_tab.redo)
         self._bind_sneltoets(accel_group, "online_markeren", lambda: self.overzicht_tab._on_markeer_online(None))
+        self._bind_sneltoets(accel_group, "offline_markeren", lambda: self.overzicht_tab._on_markeer_offline(None))
         self._bind_sneltoets(accel_group, "bewerken", lambda: self.overzicht_tab._on_bewerken(None))
         self._bind_sneltoets(accel_group, "zoeken", self._focus_zoekveld)
         self._bind_sneltoets(accel_group, "toewijzen", lambda: self.overzicht_tab._on_toewijzen(None))
@@ -4630,7 +4763,7 @@ class MainWindow(Gtk.Window):
     def _herbouw_registreer_tab(self):
         self.notebook.remove_page(0)
         self.registreer_tab = RegistreerTab(self)
-        self.notebook.insert_page(self.registreer_tab, Gtk.Label(label="📝 Registreren"), 0)
+        self.notebook.insert_page(self.registreer_tab, Gtk.Label(label="📝 Nieuw Product"), 0)
         self.notebook.show_all()
 
 

@@ -5,6 +5,7 @@ Alle instellingen binnen de GUI
 """
 
 import os
+import shutil
 from marktplaats_suite.common import data_dir, asset, get_xml_path, TabBasis, run_standalone
 import sys
 import time
@@ -58,6 +59,10 @@ class ConfigManager:
             "storage": {
                 "xml_path": ""
             },
+            "browser": "auto",
+            "vinted": {"prijs_terugval_factor": 0.85},
+            "whoppah": {"prijs_factor": 1.25, "ondergrens_factor": 0.85, "stap_procent": 5,
+                        "interval": "twee weken", "biedingen": True, "ophalen": True},
             "chrome": {
                 "user_data_dir": os.path.expanduser("~/.config/google-chrome"),
                 "profile": "Default"
@@ -167,16 +172,7 @@ Zondag en maandag Gesloten"""
 
 # Kolomvolgorde - identiek aan marktplaats_productmanager.py, zodat
 # beide apps dezelfde Sheet/XML kunnen lezen/schrijven.
-COLUMNS = [
-    "artikelnummer", "titel", "categorie", "omschrijving", "online",
-    "lengte", "breedte", "hoogte", "gewicht", "conditie", "staat_details",
-    "waarde_min", "waarde_max", "vraagprijs", "aanmaakdatum", "aanmaaktijd",
-    "tijdsperiode", "opslaglocatie", "sublocatie", "rij", "folder_locatie",
-    "verkocht", "verkoopprijs", "verkoopdatum", "algemene_voorwaarden",
-    "url_1", "url_2", "url_3", "url_4", "url_5",
-    "leverwijze", "klant_naam", "klant_telefoon", "klant_email",
-    "ophaal_afspraak", "track_trace", "verwerkt_door", "toegewezen_aan",
-]
+from marktplaats_suite.common import COLUMNS
 COL = {naam: idx for idx, naam in enumerate(COLUMNS)}
 
 def build_description(product):
@@ -269,14 +265,218 @@ class MarktplaatsAuto:
         self.wait_for_user = False
         self.was_skipped = False
         self.on_wait_for_user = None
+        self.on_vraag_logo = None
+        self.start_url = "https://www.marktplaats.nl/plaats"
+        self._logo_keuze = None
         self.user_logged_in = False
 
-    def start_chrome(self):
+    # ------------------------------------------------------------
+    # Foto's zoeken: welke map uit Product Studio moet er geüpload worden?
+    # ------------------------------------------------------------
+    _FOTO_EXT = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
+
+    def _fotos_in(self, map_pad):
+        if not os.path.isdir(map_pad):
+            return []
+        return sorted(os.path.join(map_pad, f) for f in os.listdir(map_pad)
+                      if f.lower().endswith(self._FOTO_EXT))
+
+    def _basismappen(self):
+        kandidaten = [self.config.get('paths.base_image_path', "")]
+        try:
+            with open(os.path.join(data_dir(), "fotomanager_config.json")) as fh:
+                uitvoer = json.load(fh).get('output_dir', '')
+            if uitvoer:
+                kandidaten.append(os.path.dirname(uitvoer.rstrip('/')))
+        except Exception:
+            pass
+        xml = get_xml_path() or ""
+        if xml:
+            xml = os.path.expanduser(xml)
+            kandidaten.append(xml if os.path.isdir(xml) else os.path.dirname(xml))
+        kandidaten.append(os.path.expanduser("~/Marktplaats/Producten"))
+        kandidaten.append(os.path.expanduser("~/Afbeeldingen"))
+        gezien, uit = set(), []
+        for k in kandidaten:
+            k = os.path.expanduser(k or "")
+            if k and k not in gezien:
+                gezien.add(k)
+                uit.append(k)
+        return uit
+
+    def _zoek_fotos(self, artikel, modus="vraag"):
+        """Kiest de map met foto's voor Marktplaats (nooit 'transparant': PNG's zonder achtergrond)."""
+        artikelmap = None
+        for basis in self._basismappen():
+            kandidaat = os.path.join(basis, artikel)
+            if os.path.isdir(kandidaat):
+                artikelmap = kandidaat
+                break
+        if not artikelmap:
+            self.logger.warning(f"   ⚠️ Geen map '{artikel}' gevonden in: " + ", ".join(self._basismappen()))
+            return []
+
+        # Gekozen achtergrond (niet wit) heeft eigen mappen; 'met_logo' bevat bij
+        # 'originele achtergrond behouden' de foto's met de originele achtergrond.
+        if self._fotos_in(os.path.join(artikelmap, "zonder_logo_bg")) or \
+           self._fotos_in(os.path.join(artikelmap, "met_logo_bg")):
+            met, zonder = "met_logo_bg", "zonder_logo_bg"
+        else:
+            met, zonder = "met_logo", "zonder_logo"
+        met_fotos = self._fotos_in(os.path.join(artikelmap, met))
+        zonder_fotos = self._fotos_in(os.path.join(artikelmap, zonder))
+
+        if modus == "zonder" and zonder_fotos:
+            gekozen, fotos = zonder, zonder_fotos
+        elif met_fotos and zonder_fotos:
+            keuze = self._logo_keuze
+            if keuze is None:
+                keuze = self.on_vraag_logo(artikel) if self.on_vraag_logo else "met"
+                if keuze == "stop":
+                    self.running = False
+                    return []
+                if isinstance(keuze, tuple):   # (keuze, onthouden)
+                    keuze, onthouden = keuze
+                    if onthouden:
+                        self._logo_keuze = keuze
+            gekozen = met if keuze == "met" else zonder
+            fotos = met_fotos if keuze == "met" else zonder_fotos
+        elif met_fotos:
+            gekozen, fotos = met, met_fotos
+        elif zonder_fotos:
+            gekozen, fotos = zonder, zonder_fotos
+        else:
+            self.logger.warning(f"   ⚠️ Geen foto's in {artikelmap} (gezocht in {met}/ en {zonder}/)")
+            return []
+        self.logger.info(f"   📁 Foto's uit: {os.path.join(artikelmap, gekozen)}")
+        return fotos
+
+    _OMSCHRIJVING_SELECTORS = [
+        "div.RichTextEditor-module-editorInput[data-testid='text-editor-input_nl-NL']",
+        "[data-testid^='text-editor-input']",
+        "div[class*='RichTextEditor'][contenteditable='true']",
+        "div[contenteditable='true'][role='textbox']",
+        "div[contenteditable='true']",
+        "textarea[name='description']",
+        "textarea",
+    ]
+
+    def _vul_omschrijving(self, tekst):
+        """Zoekt het omschrijvingsveld (meerdere mogelijke selectors), vult het en controleert het resultaat."""
+        veld = None
+        eind = time.time() + 20
+        while time.time() < eind and veld is None:
+            for sel in self._OMSCHRIJVING_SELECTORS:
+                for el in self.driver.find_elements(By.CSS_SELECTOR, sel):
+                    try:
+                        if el.is_displayed():
+                            veld = el
+                            self.logger.info(f"   ℹ️ Omschrijvingsveld gevonden via: {sel}")
+                            break
+                    except Exception:
+                        continue
+                if veld is not None:
+                    break
+            if veld is None:
+                time.sleep(0.5)
+        if veld is None:
+            raise RuntimeError("omschrijvingsveld niet gevonden op de pagina (selector verouderd?)")
+
+        self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", veld)
+        try:
+            veld.click()
+        except Exception:
+            self.driver.execute_script("arguments[0].focus();", veld)
+        time.sleep(0.3)
+
+        if veld.tag_name.lower() == "textarea":
+            veld.send_keys(tekst)
+        else:
+            for regel in tekst.split("\n"):
+                if regel.strip():
+                    self.driver.execute_script(
+                        "document.execCommand('insertText', false, arguments[0]);", regel)
+                veld.send_keys(Keys.ENTER)
+                time.sleep(0.05)
+
+        ingevuld = self.driver.execute_script(
+            "return (arguments[0].value !== undefined && arguments[0].tagName==='TEXTAREA')"
+            " ? arguments[0].value : arguments[0].innerText;", veld) or ""
+        if len(ingevuld.strip()) < min(20, len(tekst.strip())):
+            # Terugval: tekst direct in het veld zetten en het input-event afvuren
+            self.driver.execute_script(
+                "var e=arguments[0],t=arguments[1];e.focus();"
+                "if(e.tagName==='TEXTAREA'){e.value=t;}else{e.innerText=t;}"
+                "e.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:t}));"
+                "e.dispatchEvent(new Event('change',{bubbles:true}));", veld, tekst)
+            time.sleep(0.3)
+            self.logger.info("   ℹ️ Omschrijving via terugvalmethode ingevuld")
+        self.logger.info("   ✅ Omschrijving ingevuld")
+
+    def start_browser(self):
+        for k in [k for k in os.environ if k.startswith("QT_")]:
+            os.environ.pop(k, None)
+        keuze = self.config.get('browser', 'auto')
+        if keuze == 'auto':
+            keuze = 'firefox' if (shutil.which('firefox') or shutil.which('firefox-esr')) else 'chrome'
+        return self._start_firefox() if keuze == 'firefox' else self._start_chrome()
+
+    def _start_firefox(self):
+        from selenium.webdriver.firefox.options import Options as FFOptions
+        self.logger.info("🚀 Start Firefox...")
+        pad = shutil.which('firefox') or shutil.which('firefox-esr')
+        if not pad:
+            self.last_error = "Firefox is niet gevonden. Installeer firefox-esr of kies Chrome bij Instellingen."
+            self.logger.error(self.last_error)
+            return False
+        # Eigen profiel: één keer inloggen op Marktplaats, daarna onthouden.
+        profiel = os.path.join(data_dir(), "firefox_profiel")
+        os.makedirs(profiel, exist_ok=True)
+        opts = FFOptions()
+        opts.binary_location = pad
+        opts.add_argument("-profile")
+        opts.add_argument(profiel)
+        opts.set_preference("dom.webdriver.enabled", False)
+        opts.set_preference("useAutomationExtension", False)
+        try:
+            self.driver = webdriver.Firefox(options=opts)
+            try:
+                self.driver.set_window_size(1600, 1000)
+            except Exception:
+                pass
+            self.wait = WebDriverWait(self.driver, 15)
+            self.logger.success("Firefox gestart!")
+            return True
+        except Exception as e:
+            self.last_error = str(e).strip().splitlines()[0][:200] if str(e).strip() else repr(e)
+            self.logger.error(f"Firefox fout: {e}")
+            self.logger.info("💡 Sluit het automatiserings-Firefox-venster als dat nog openstaat en probeer opnieuw")
+            return False
+
+    def _start_chrome(self):
         self.logger.info("🚀 Start Chrome...")
         options = Options()
         chrome_config = self.config.get('chrome', {})
-        user_data_dir = chrome_config.get('user_data_dir', os.path.expanduser("~/.config/google-chrome"))
+        user_data_dir = chrome_config.get('user_data_dir') or ""
         profile = chrome_config.get('profile', "Default")
+        standaard_dirs = {os.path.expanduser("~/.config/google-chrome"),
+                          os.path.expanduser("~/.config/chromium"), ""}
+        if os.path.normpath(os.path.expanduser(user_data_dir)) in standaard_dirs:
+            # Recente Chrome-versies laten automatisering op het standaardprofiel niet toe,
+            # en dan start Chrome niet. Eigen profiel: één keer inloggen, daarna onthouden.
+            user_data_dir = os.path.join(data_dir(), "chrome_profiel")
+            profile = "Default"
+            os.makedirs(user_data_dir, exist_ok=True)
+        for naam in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+            pad = shutil.which(naam)
+            if pad:
+                options.binary_location = pad
+                break
+        else:
+            self.last_error = ("Chrome of Chromium is niet geïnstalleerd. "
+                               "Draai ./install.sh --met-chrome")
+            self.logger.error(self.last_error)
+            return False
 
         options.add_argument(f"--user-data-dir={user_data_dir}")
         options.add_argument(f"--profile-directory={profile}")
@@ -293,8 +493,9 @@ class MarktplaatsAuto:
             self.logger.success("Chrome gestart!")
             return True
         except Exception as e:
+            self.last_error = str(e).strip().splitlines()[0][:200] if str(e).strip() else repr(e)
             self.logger.error(f"Chrome fout: {e}")
-            self.logger.info("💡 Zorg dat Chrome niet open staat en probeer opnieuw")
+            self.logger.info("💡 Zorg dat dit Chrome-profiel niet al open staat en probeer opnieuw")
             return False
 
     def wait_for_manual_login(self):
@@ -345,9 +546,12 @@ class MarktplaatsAuto:
                 categorie = row[COL["categorie"]].strip() if len(row) > COL["categorie"] and row[COL["categorie"]] else ""
                 online = row[COL["online"]].strip().lower() if len(row) > COL["online"] and row[COL["online"]] else ""
                 verkocht = row[COL["verkocht"]].strip().lower() if len(row) > COL["verkocht"] and row[COL["verkocht"]] else ""
+                kanalen = [k.strip().lower() for k in (row[COL["kanalen"]] or "").split(",") if k.strip()] or ["marktplaats"]
 
-                if verkocht == "ja" or online == "ja":
-                    continue  # al online staande of verkochte producten niet opnieuw plaatsen
+                if verkocht == "ja":
+                    continue  # verkochte producten niet opnieuw plaatsen
+                if online == "ja" or "marktplaats" not in kanalen:
+                    continue  # al op Marktplaats, of niet voor Marktplaats bedoeld
 
                 if artikelnummer and titel:
                     rows.append({
@@ -355,6 +559,7 @@ class MarktplaatsAuto:
                         "artikelnummer": artikelnummer,
                         "titel": titel,
                         "categorie": categorie or titel,
+                        "data": dict(zip(COLUMNS, [x or "" for x in row])),
                         "row": row
                     })
 
@@ -396,8 +601,88 @@ class MarktplaatsAuto:
         else:
             self.logger.info(f"⏹️ Gestopt na {processed} producten")
 
-    def process_one_product(self, product):
+    # ------------------------------------------------------------------
+    # Keuzes op de Marktplaats-pagina op basis van tekst (radio/checkbox)
+    # ------------------------------------------------------------------
+    _JS_ZOEK_KEUZE = """
+        const soort = arguments[0], tekst = arguments[1].toLowerCase(), begin = arguments[2];
+        const norm = s => s.replace(/\\s+/g, ' ').trim().toLowerCase();
+        let beste = null, besteLen = 1e9;
+        for (const inp of document.querySelectorAll('input[type=' + soort + ']')) {
+            // zoek de bijbehorende tekst: label[for], omringend label, ouder of grootouder (alleen korte teksten)
+            const lbl = inp.id ? document.querySelector('label[for="' + inp.id + '"]') : null;
+            const kandidaten = [lbl, inp.closest('label'), inp.parentElement,
+                                inp.parentElement && inp.parentElement.parentElement];
+            let t = '';
+            for (const c of kandidaten) {
+                const ct = c ? norm(c.textContent || '') : '';
+                if (ct && ct.length < 120) { t = ct; break; }
+            }
+            if (!t) continue;
+            const ok = begin ? t.startsWith(tekst) : t.includes(tekst);
+            if (ok && t.length < besteLen) { beste = inp; besteLen = t.length; }
+        }
+        return beste;
+    """
+
+    def _zet_keuze(self, soort, tekst, aan=True, begin=False):
+        """Zet een radio/checkbox aan of uit op basis van de zichtbare tekst. True als gevonden."""
+        inp = self.driver.execute_script(self._JS_ZOEK_KEUZE, soort, tekst, begin)
+        if inp is None:
+            return False
+        huidig = bool(self.driver.execute_script("return arguments[0].checked;", inp))
+        if huidig != aan:
+            self.driver.execute_script(
+                "arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", inp)
+            time.sleep(0.4)
+        return True
+
+    def _klik_verder(self):
+        """Klikt op de knop 'Verder'; valt terug op Tab-navigatie zoals voorheen."""
         try:
+            knop = self.driver.find_element(
+                By.XPATH, "//button[normalize-space()='Verder' or .//*[normalize-space()='Verder']]")
+            self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", knop)
+            knop.click()
+            return
+        except Exception:
+            self.logger.warning("   ⚠️ Knop 'Verder' niet gevonden, ik probeer toetsenbordnavigatie")
+        actions = ActionChains(self.driver)
+        for _ in range(4):
+            actions.send_keys(Keys.TAB)
+        actions.send_keys(Keys.ENTER).perform()
+
+    def _stel_verzending_in(self, product):
+        """Vinkt passende vervoerders aan en kiest de pakketgrootte op basis van afmetingen en gewicht."""
+        from marktplaats_suite.verzending import kies_automatisch
+        row = product["row"]
+        def veld(naam):
+            return row[COL[naam]] if len(row) > COL[naam] else ""
+        keuze = kies_automatisch(veld("lengte"), veld("breedte"), veld("hoogte"), veld("gewicht"))
+        if not keuze:
+            self.logger.info("   ℹ️ Verzending: geen pakketadvies (afmetingen ontbreken of te groot), handmatig instellen")
+            return
+        klasse, passend = keuze["klasse"], keuze["vervoerders"]
+        # Een verzendkeuze bestaat alleen als de categorie vervoerders toont (niet bij alleen-Brenger)
+        if not self._zet_keuze("checkbox", "postnl", True, begin=True) and not self._zet_keuze("checkbox", "dhl", True, begin=True):
+            self.logger.info("   ℹ️ Verzending: deze categorie toont geen pakketvervoerders (bijv. alleen Brenger), overgeslagen")
+            return
+        for naam in ("Budbee", "PostNL", "DHL"):
+            gewenst = naam in passend
+            if not self._zet_keuze("checkbox", naam.lower(), gewenst, begin=True):
+                continue
+        if self._zet_keuze("radio", klasse.lower(), True, begin=True):
+            self.logger.info(f"   ✅ Verzending: {klasse} via {', '.join(passend)}")
+        else:
+            self.logger.warning(f"   ⚠️ Pakketgrootte '{klasse}' niet gevonden, handmatig kiezen")
+
+    def process_one_product(self, product):
+        """Plaatst het product op Marktplaats."""
+        return self._plaats_marktplaats(product)
+
+    def _plaats_marktplaats(self, product):
+        try:
+            self.start_url = "https://www.marktplaats.nl/plaats"
             self.step = 1
             self.logger.step(self.step, "Naar plaats pagina")
             self.driver.get("https://www.marktplaats.nl/plaats")
@@ -436,24 +721,23 @@ class MarktplaatsAuto:
             title_field.send_keys(Keys.ENTER)
             time.sleep(1)
 
-            actions = ActionChains(self.driver)
-            for _ in range(4):
-                actions.send_keys(Keys.TAB)
-                time.sleep(0.2)
-            actions.send_keys(Keys.ENTER).perform()
+            row = product["row"]
+            gewenste_cat = (row[COL["marktplaats_categorie"]] if len(row) > COL["marktplaats_categorie"] else "").strip()
+            if gewenste_cat:
+                try:
+                    if self._zet_keuze("radio", gewenste_cat, True):
+                        self.logger.info(f"   ✅ Marktplaats-categorie gekozen: {gewenste_cat}")
+                    else:
+                        self.logger.warning(f"   ⚠️ Categorie '{gewenste_cat}' niet in de suggesties, eerste suggestie blijft staan")
+                except Exception as e:
+                    self.logger.warning(f"   ⚠️ Categorie kiezen mislukt ({e}), eerste suggestie blijft staan")
+            self._klik_verder()
             time.sleep(2)
             self.logger.info(f"   ✅ Titel: {title}")
 
             self.step = 4
             self.logger.step(self.step, "Foto's uploaden")
-            base_path = self.config.get('paths.base_image_path', os.path.expanduser("~/Afbeeldingen"))
-            folder = os.path.join(base_path, product['artikelnummer'], "met_logo")
-            images = []
-            if os.path.exists(folder):
-                for f in os.listdir(folder):
-                    if f.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
-                        images.append(os.path.join(folder, f))
-            images.sort()
+            images = self._zoek_fotos(product['artikelnummer'])
 
             if images:
                 file_input = self.driver.find_element(By.CSS_SELECTOR, "input[type='file']")
@@ -469,29 +753,17 @@ class MarktplaatsAuto:
 
             if description:
                 try:
-                    desc_field = self.wait.until(
-                        EC.presence_of_element_located((
-                            By.CSS_SELECTOR,
-                            "div.RichTextEditor-module-editorInput[data-testid='text-editor-input_nl-NL']"
-                        ))
-                    )
-                    desc_field.click()
-                    time.sleep(0.3)
-
-                    for line in description.split("\n"):
-                        if line.strip():
-                            self.driver.execute_script(
-                                "document.execCommand('insertText', false, arguments[0]);",
-                                line
-                            )
-                        desc_field.send_keys(Keys.ENTER)
-                        time.sleep(0.05)
-
-                    self.logger.info("   ✅ Omschrijving ingevuld")
+                    self._vul_omschrijving(description)
                 except Exception as e:
                     self.logger.warning(f"   ⚠️ Omschrijving invullen mislukt: {e}")
             else:
                 self.logger.info("   ⚠️ Geen omschrijving-data gevonden, overgeslagen")
+
+            if self.config.get('preferences.auto_verzending', True):
+                try:
+                    self._stel_verzending_in(product)
+                except Exception as e:
+                    self.logger.warning(f"   ⚠️ Verzending automatisch instellen mislukt: {e}")
 
             self.step = 6
             self.logger.step(self.step, "Wacht op gebruiker")
@@ -499,7 +771,7 @@ class MarktplaatsAuto:
             self.logger.info("📝 ADVERTENTIE IS BIJNA KLAAR!")
             self.logger.info("📝 Maak de advertentie handmatig af:")
             self.logger.info("   1. Controleer de beschrijving")
-            self.logger.info("   2. Vul eventuele extra velden in")
+            self.logger.info("   2. Controleer verzending, prijs en eventuele extra velden")
             self.logger.info("   3. Klik op 'Plaats advertentie'")
             self.logger.info("")
             self.logger.info("⏸️ Klik op 'Volgende' als de advertentie geplaatst is, of 'Overslaan' om dit product bewust over te slaan")
@@ -535,7 +807,7 @@ class MarktplaatsAuto:
             self.logger.error(f"Fout bij product {product['artikelnummer']}: {e}")
             return False
 
-    def _mark_product_online(self, artikelnummer, advertentie_url=None):
+    def _mark_product_online(self, artikelnummer, advertentie_url=None, kolom="online"):
         """Zet 'online' op ja voor dit product in de XML, zodat een
         volgende uploadsessie dit product overslaat en
         marktplaats_productmanager.py het meteen als online toont. Slaat
@@ -551,9 +823,9 @@ class MarktplaatsAuto:
         for prod_el in root.findall("product"):
             nr_el = prod_el.find("artikelnummer")
             if nr_el is not None and (nr_el.text or "").strip() == artikelnummer:
-                online_el = prod_el.find("online")
+                online_el = prod_el.find(kolom)
                 if online_el is None:
-                    online_el = ET.SubElement(prod_el, "online")
+                    online_el = ET.SubElement(prod_el, kolom)
                 online_el.text = "ja"
                 if advertentie_url:
                     # Zet de URL in het eerste lege url_1..url_5-veld (een
@@ -579,7 +851,7 @@ class MarktplaatsAuto:
         self.was_skipped = True
         try:
             self.logger.info("⏭️ Overslaan - pagina verlaten...")
-            self.driver.get("https://www.marktplaats.nl/plaats")
+            self.driver.get(getattr(self, "start_url", "https://www.marktplaats.nl/plaats"))
         except Exception as e:
             self.logger.warning(f"Kon niet terugkeren naar plaats-pagina: {e}")
         self.wait_for_user = False
@@ -622,6 +894,12 @@ class App:
         self.logger = Logger()
         self.auto = MarktplaatsAuto(self.config, self.logger)
         self.auto.on_wait_for_user = self._on_wait_for_user
+        try:
+            from marktplaats_suite import bridge
+            bridge.start(self.config)
+        except Exception:
+            pass
+        self.auto.on_vraag_logo = self._vraag_logo
         self.running = False
 
         self._setup_ui()
@@ -642,6 +920,30 @@ class App:
         settings_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         settings_box.set_border_width(10)
         notebook.append_page(settings_box, Gtk.Label(label="⚙️ Instellingen"))
+
+        platform_hint = Gtk.Label()
+        platform_hint.set_markup("<small><i>ℹ️ De Product Uploader plaatst op <b>Marktplaats</b> (foto's, omschrijving en verzending). "
+                                 "Voor Whoppah en Vinted gebruik je de userscripts (knop 🧩 Userscripts op het Dashboard).</i></small>")
+        platform_hint.set_xalign(0)
+        platform_hint.set_line_wrap(True)
+        settings_box.pack_start(platform_hint, False, False, 0)
+
+        # Browserkeuze
+        label = Gtk.Label()
+        label.set_markup("<b>Browser</b>")
+        label.set_halign(Gtk.Align.START)
+        settings_box.pack_start(label, False, False, 0)
+        self.browser_combo = Gtk.ComboBoxText()
+        for sleutel, tekst in (("auto", "Automatisch (Firefox als die er is, anders Chrome)"),
+                               ("firefox", "Firefox"), ("chrome", "Chrome / Chromium")):
+            self.browser_combo.append(sleutel, tekst)
+        self.browser_combo.set_active_id("auto")
+        settings_box.pack_start(self.browser_combo, False, False, 0)
+        fh = Gtk.Label()
+        fh.set_markup("<small><i>Firefox gebruikt een eigen profiel; je logt één keer in op Marktplaats. "
+                      "Het onderstaande Chrome-profiel geldt alleen voor Chrome.</i></small>")
+        fh.set_xalign(0); fh.set_line_wrap(True)
+        settings_box.pack_start(fh, False, False, 0)
 
         # Chrome profiel sectie
         label = Gtk.Label()
@@ -736,6 +1038,10 @@ class App:
         self.wait_products_entry.set_width_chars(10)
         grid.attach(self.wait_products_entry, 1, 1, 1, 1)
 
+        self.auto_verzending_check = Gtk.CheckButton(
+            label="Verzending automatisch instellen (vervoerders en pakketgrootte op basis van afmetingen en gewicht)")
+        grid.attach(self.auto_verzending_check, 0, 2, 2, 1)
+
         save_btn = Gtk.Button(label="💾 Opslaan")
         save_btn.connect("clicked", self._save_config)
         settings_box.pack_start(save_btn, False, False, 0)
@@ -771,6 +1077,11 @@ class App:
         self.skip_btn.set_sensitive(False)
         self.skip_btn.connect("clicked", self._skip)
         btn_box.pack_start(self.skip_btn, False, False, 0)
+
+        self.script_btn = Gtk.Button(label="🧩 Userscripts")
+        self.script_btn.set_tooltip_text("Vul Whoppah en Vinted in je eigen, ingelogde Firefox in met userscripts.")
+        self.script_btn.connect("clicked", self._toon_userscript)
+        btn_box.pack_start(self.script_btn, False, False, 0)
 
         self.stop_btn = Gtk.Button(label="⏹️ Stop")
         self.stop_btn.set_sensitive(False)
@@ -830,6 +1141,7 @@ class App:
         storage = self.config.get('storage', {})
         self.xml_path_entry.set_text(get_xml_path())
 
+        self.browser_combo.set_active_id(self.config.get('browser', 'auto') or 'auto')
         chrome = self.config.get('chrome', {})
         self.profile_path_entry.set_text(chrome.get('user_data_dir', os.path.expanduser("~/.config/google-chrome")))
         self.profile_name_entry.set_text(chrome.get('profile', "Default"))
@@ -840,13 +1152,16 @@ class App:
         prefs = self.config.get('preferences', {})
         self.max_title_entry.set_text(str(prefs.get('max_title_length', 60)))
         self.wait_products_entry.set_text(str(prefs.get('wait_between_products', 3)))
+        self.auto_verzending_check.set_active(bool(prefs.get('auto_verzending', True)))
 
     def _save_config(self, widget):
+        self.config.set('browser', self.browser_combo.get_active_id() or 'auto')
         self.config.set('chrome.user_data_dir', self.profile_path_entry.get_text().strip())
         self.config.set('chrome.profile', self.profile_name_entry.get_text().strip())
         self.config.set('paths.base_image_path', self.image_path_entry.get_text().strip())
         self.config.set('preferences.max_title_length', int(self.max_title_entry.get_text().strip() or 60))
         self.config.set('preferences.wait_between_products', int(self.wait_products_entry.get_text().strip() or 3))
+        self.config.set('preferences.auto_verzending', self.auto_verzending_check.get_active())
 
         self.logger.success("✅ Configuratie opgeslagen!")
 
@@ -860,6 +1175,33 @@ class App:
         dialog.run()
         dialog.destroy()
 
+    def _toon_userscript(self, widget):
+        from marktplaats_suite import bridge
+        draait = bridge.start(self.config)
+        url = f"http://127.0.0.1:{bridge.POORT}/whoppah.user.js"
+        d = Gtk.MessageDialog(transient_for=self.window, flags=0, message_type=Gtk.MessageType.INFO,
+                              buttons=Gtk.ButtonsType.CLOSE, text="Userscripts voor Whoppah en Vinted")
+        d.format_secondary_text(
+            ("De Suite levert nu producten aan de scripts (alleen op deze computer).\n\n" if draait else
+             "Let op: poort %d is al in gebruik; draait er al een Suite?\n\n" % bridge.POORT) +
+            "Eenmalig installeren (Violentmonkey of Tampermonkey in Firefox):\n"
+            "1. Open de link(s) hieronder in Firefox en bevestig de installatie.\n"
+            "2. Ga naar Whoppah of Vinted (ingelogd) en begin met een nieuwe advertentie; voeg de foto's zelf toe.\n"
+            "3. Rechtsonder staat het paneel: kies je product, de rest vult het script in.\n\n"
+            "Whoppah: " + url + "\nVinted:  " + url.replace("whoppah", "vinted"))
+        d.add_button("Kopieer Whoppah-link", 10)
+        d.add_button("Kopieer Vinted-link", 12)
+        d.add_button("Kopieer producten (JSON)", 11)
+        r = d.run()
+        cb = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        if r == 10:
+            cb.set_text(url, -1)
+        elif r == 12:
+            cb.set_text(url.replace("whoppah", "vinted"), -1)
+        elif r == 11:
+            cb.set_text(bridge.json_voor_klembord(self.config), -1)
+        d.destroy()
+
     def _start(self, widget):
         if self.running:
             return
@@ -867,6 +1209,7 @@ class App:
         self._save_config(widget)
 
         self.running = True
+        self.auto._logo_keuze = None
         self.auto.running = True
         self.auto.user_logged_in = False
         self.start_btn.set_sensitive(False)
@@ -880,8 +1223,8 @@ class App:
 
     def _run(self):
         try:
-            if not self.auto.start_chrome():
-                GLib.idle_add(self._on_error, "Chrome starten mislukt")
+            if not self.auto.start_browser():
+                GLib.idle_add(self._on_error, "Browser starten mislukt: " + getattr(self.auto, "last_error", "zie Log"))
                 return
 
             GLib.idle_add(self._update_status, "🔑 Wacht op inloggen...")
@@ -917,6 +1260,34 @@ class App:
         self.skip_btn.set_sensitive(False)
         self.logger.info("⏩ Overslaan...")
         threading.Thread(target=self.auto.skip_current, daemon=True).start()
+
+    def _vraag_logo(self, artikel):
+        """Wordt vanuit de werkthread aangeroepen; toont een popup en wacht op het antwoord."""
+        resultaat = {}
+        klaar = threading.Event()
+
+        def toon():
+            d = Gtk.MessageDialog(parent=self.window.top(), flags=0, message_type=Gtk.MessageType.QUESTION,
+                                  buttons=Gtk.ButtonsType.NONE,
+                                  text=f"Foto's voor {artikel}: met of zonder logo/watermerk?")
+            d.format_secondary_text("Er zijn twee sets foto's gemaakt. Welke wil je op Marktplaats uploaden?")
+            d.add_button("Met logo/watermerk", Gtk.ResponseType.YES)
+            d.add_button("Zonder logo/watermerk", Gtk.ResponseType.NO)
+            d.add_button("Stoppen", Gtk.ResponseType.CANCEL)
+            onthoud = Gtk.CheckButton(label="Onthoud deze keuze voor de volgende producten in deze run")
+            d.get_content_area().pack_start(onthoud, False, False, 6)
+            d.show_all()
+            r = d.run()
+            resultaat['v'] = ("met" if r == Gtk.ResponseType.YES else
+                              "zonder" if r == Gtk.ResponseType.NO else "stop",
+                              onthoud.get_active())
+            d.destroy()
+            klaar.set()
+            return False
+
+        GLib.idle_add(toon)
+        klaar.wait()
+        return resultaat['v']
 
     def _on_wait_for_user(self):
         GLib.idle_add(self._enable_next)

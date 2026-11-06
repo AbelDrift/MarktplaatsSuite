@@ -8,10 +8,10 @@ Alles in **één venster** met tabs:
 
 | Tab | Was | Doel |
 |---|---|---|
-| 📝 Registreren / 📊 Overzicht / 📈 Dashboard | MarktplaatsProductmanager | Producten registreren, labels/barcodes, verkocht/retour/gereserveerd, statistieken |
-| 📷 Foto's | MarktplaatsFotoManager | Foto's verwerken (achtergrond, watermerk, logo, mappenstructuur) |
-| 🔍 Scanner | MarktplaatsScanner | USB-barcodescanner met productinfo en foto |
-| 🤖 Automater | MarktplaatsAutomater | Advertenties automatisch plaatsen (Selenium + Chrome/Chromium) |
+| 📝 Nieuw Product / 📊 Product Management / 📈 Sales Dashboard | MarktplaatsProductmanager | Producten registreren, labels/barcodes, verkocht/retour/gereserveerd, statistieken |
+| 📷 Product Studio | MarktplaatsFotoManager | Foto's verwerken (achtergrond, watermerk, logo, mappenstructuur) |
+| 🔍 Product Scanner | MarktplaatsScanner | USB-barcodescanner met productinfo en foto |
+| 🤖 Product Uploader | MarktplaatsAutomater | Advertenties automatisch plaatsen, nu alleen voor Marktplaats (Selenium + Chrome/Chromium) |
 
 Start met `marktplaats-suite` of via het applicatiemenu.
 
@@ -54,3 +54,46 @@ naar die map; de fotomanager-instellingen heten nu `fotomanager_config.json`
 - GTK3 onder X11/XWayland (starters zetten `GDK_BACKEND=x11`).
 - De thumbnail-fallback in de scanner leest Marktplaats-pagina's uit en kan breken als de site verandert.
 - Getest op syntax en installeerbaarheid; de GUI zelf moet op een echt Debian/Ubuntu-bureaublad worden uitgeprobeerd.
+
+## Verzendadvies en slimme Automater
+
+- In **Registreren** verschijnt onder afmetingen/gewicht een live **verzendadvies**: welke pakketklasse en
+  vervoerder passen (inclusief 2 cm / 0,3 kg verpakkingsmarge) en wat het kost. Limieten en prijzen staan in
+  `verzendtabel.json` in de datamap en zijn aanpasbaar.
+- Het veld **Marktplaats-categorie** bepaalt welke suggestie de Automater kiest (anders de eerste). Je krijgt
+  een waarschuwing als de gekozen categorie alleen Brenger toont terwijl het product in een pakket past.
+- De **Automater** vinkt passende vervoerders aan en kiest de pakketgrootte (uit te zetten in zijn voorkeuren).
+  Dit is experimenteel: controleer de advertentie altijd voor je op "Plaats advertentie" klikt.
+- Alle onderdelen delen één kolomlijst voor `producten.xml`; de Scanner past bij "verkocht" alleen dat ene
+  product aan en wist geen velden van andere onderdelen meer.
+
+- **Product Studio** pakt zip-bestanden in de bronmap zelf uit: alle foto's uit elke zip doen mee, zonder dat je iets handmatig uitpakt.
+
+## Whoppah en Vinted (userscripts)
+
+De Product Uploader plaatst op **Marktplaats** (foto's, omschrijving, verzending). Whoppah en Vinted weigeren een
+door de Uploader bestuurde browser (veiligheidscontrole), daarom vul je die in je **eigen, ingelogde Firefox** in met
+twee userscripts. Foto's voeg je zelf toe, het definitief plaatsen doe je ook zelf.
+
+1. Installeer de Firefox-extensie Violentmonkey of Tampermonkey.
+2. Start de Suite en klik in de Product Uploader op **🧩 Userscripts**. Open de links
+   (`http://127.0.0.1:8765/whoppah.user.js` en `http://127.0.0.1:8765/vinted.user.js`) in Firefox en bevestig de installatie.
+3. Open Whoppah ("Advertentie plaatsen") of `vinted.nl/items/new`, voeg de foto's toe en kies rechtsonder in het paneel je product.
+   Lukt ophalen niet, gebruik dan "Kopieer producten (JSON)" in de Suite en plak dat in het paneel.
+
+**Whoppah:** details controleren/overschrijven (merk, titel, stijl, kleur, materiaal, staat), maten, prijs (Marktplaatsprijs x 1,25,
+ondergrens x 0,85, Smart Drop 5% elke twee weken) en verzending (Pakket tot 100x50x50 cm, anders Koerier).
+Prijsregels aanpassen kan in `automater_config.json` onder `"whoppah"`.
+
+**Vinted:** titel, beschrijving, categorie (uit "Vinted-categorie", anders de suggestie van Vinted), merk (anders "Geen merk"),
+staat, kleur (max. 2), materiaal, prijs (= 'Min. waarde', anders 85% van de vraagprijs) en pakketformaat Klein/Middel/Groot.
+Verkoop je namens een winkel of kringloop, gebruik dan een Vinted Pro-account.
+
+De brug in de Suite luistert alleen op 127.0.0.1 en accepteert alleen verzoeken met een lokale hostnaam.
+
+## Gemini-tekst plakken
+
+Op *Nieuw Product* staat de knop **📋 Plak Gemini-tekst**. Plak het antwoord van Gemini; de app vult
+titel (max. 60 tekens), omschrijving (inclusief 'Details:'), merk, materiaal, kleur, stijl,
+afmetingen (bij 'Afmeting: L x B x H'), staat en geschatte waarde (min/max) in. Alleen velden die in
+de tekst staan worden overschreven.
