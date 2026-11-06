@@ -5265,9 +5265,48 @@ class KolomKiezerDialog(Gtk.Dialog):
         self.user_settings.set_zichtbare_kolommen(self.filter_type, zichtbaar)
 
 
+def toon_splash(duur_ms=1800):
+    """Toont kort een splash screen met het logo; blokkeert niet lang."""
+    try:
+        win = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
+        win.set_decorated(False)
+        win.set_resizable(False)
+        win.set_position(Gtk.WindowPosition.CENTER)
+        win.set_type_hint(Gdk.WindowTypeHint.SPLASHSCREEN)
+        win.set_keep_above(True)
+        win.set_skip_taskbar_hint(True)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_border_width(28)
+        try:
+            pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(asset("logo.png"), 256, 256, True)
+            box.pack_start(Gtk.Image.new_from_pixbuf(pb), False, False, 0)
+        except Exception:
+            pass
+        titel = Gtk.Label()
+        titel.set_markup('<span size="xx-large" weight="bold">SellYourShit</span>')
+        box.pack_start(titel, False, False, 0)
+        laden = Gtk.Label(label="Laden…")
+        box.pack_start(laden, False, False, 0)
+        win.add(box)
+        win.show_all()
+        eind = GLib.get_monotonic_time() + duur_ms * 1000
+        while GLib.get_monotonic_time() < eind:
+            while Gtk.events_pending():
+                Gtk.main_iteration()
+            GLib.usleep(20000)
+        return win
+    except Exception:
+        return None
+
+
 def main():
     GLib.set_prgname("marktplaats_suite")
     apply_css()
+    splash = toon_splash()
+    if splash is not None:
+        splash.destroy()
+        while Gtk.events_pending():
+            Gtk.main_iteration()
 
     user_manager = UserManager()
 
